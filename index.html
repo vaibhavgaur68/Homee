@@ -450,6 +450,68 @@
   .note-input::placeholder { color: var(--text3); }
   .note-input:focus { border-color: var(--accent2); }
 
+  /* ── FREQUENCY PICKER ── */
+  .freq-picker {
+    display: none; margin-bottom: 16px;
+    background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 14px 16px;
+  }
+  .freq-picker.show { display: block; }
+  .freq-label-top {
+    font-size: 10px; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
+  }
+  .freq-tabs {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .freq-tab {
+    padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    border: 1.5px solid var(--border2); background: transparent;
+    color: var(--text3); cursor: pointer; transition: all 0.15s;
+    font-family: var(--font-body);
+  }
+  .freq-tab.active {
+    border-color: var(--accent2); background: rgba(196,169,109,0.12);
+    color: var(--accent);
+  }
+  .freq-tab:active { transform: scale(0.96); }
+  .freq-days-row {
+    display: none; margin-top: 10px; gap: 6px; flex-wrap: wrap;
+  }
+  .freq-days-row.show { display: flex; }
+  .freq-day-btn {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 1.5px solid var(--border2); background: transparent;
+    color: var(--text3); font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; font-family: var(--font-body);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .freq-day-btn.active {
+    border-color: var(--accent2); background: rgba(196,169,109,0.12);
+    color: var(--accent);
+  }
+  .freq-day-btn:active { transform: scale(0.93); }
+  .freq-dom-row {
+    display: none; margin-top: 10px; gap: 6px; flex-wrap: wrap;
+  }
+  .freq-dom-row.show { display: flex; }
+  .freq-dom-btn {
+    width: 34px; height: 34px; border-radius: 8px;
+    border: 1.5px solid var(--border2); background: transparent;
+    color: var(--text3); font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; font-family: var(--font-body);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .freq-dom-btn.active {
+    border-color: var(--accent2); background: rgba(196,169,109,0.12);
+    color: var(--accent);
+  }
+  .freq-dom-btn:active { transform: scale(0.93); }
+  .freq-hint {
+    margin-top: 8px; font-size: 11px; color: var(--accent2);
+    font-weight: 500;
+  }
+
   .recurring-toggle {
     display: flex; align-items: center; justify-content: space-between;
     background: var(--surface2); border-radius: var(--radius-sm);
@@ -897,10 +959,32 @@
     <input class="note-input" type="text" id="add-note" placeholder="Note (optional)">
     <div class="recurring-toggle" onclick="toggleRecurring()">
       <div class="toggle-left">
-        <div class="toggle-label">Recurring Daily</div>
-        <div class="toggle-sub">Auto-log every day</div>
+        <div class="toggle-label">Recurring</div>
+        <div class="toggle-sub" id="recurring-toggle-sub">Auto-log on a schedule</div>
       </div>
       <div class="toggle-switch" id="recurring-toggle-sw"></div>
+    </div>
+    <!-- Frequency picker (shown when recurring is on) -->
+    <div class="freq-picker" id="freq-picker">
+      <div class="freq-label-top">Repeat Frequency</div>
+      <div class="freq-tabs">
+        <button class="freq-tab active" onclick="setFrequency('daily')">Daily</button>
+        <button class="freq-tab" onclick="setFrequency('weekly')">Weekly</button>
+        <button class="freq-tab" onclick="setFrequency('monthly')">Monthly</button>
+      </div>
+      <!-- Day-of-week picker (weekly) -->
+      <div class="freq-days-row" id="freq-days-row">
+        <button class="freq-day-btn active" onclick="toggleWeekDay(0)">Su</button>
+        <button class="freq-day-btn active" onclick="toggleWeekDay(1)">Mo</button>
+        <button class="freq-day-btn active" onclick="toggleWeekDay(2)">Tu</button>
+        <button class="freq-day-btn active" onclick="toggleWeekDay(3)">We</button>
+        <button class="freq-day-btn active" onclick="toggleWeekDay(4)">Th</button>
+        <button class="freq-day-btn active" onclick="toggleWeekDay(5)">Fr</button>
+        <button class="freq-day-btn active" onclick="toggleWeekDay(6)">Sa</button>
+      </div>
+      <!-- Day-of-month picker (monthly) -->
+      <div class="freq-dom-row" id="freq-dom-row"></div>
+      <div class="freq-hint" id="freq-hint"></div>
     </div>
     <button class="btn-primary" onclick="submitExpense()">Save Expense</button>
   </div>
@@ -1078,6 +1162,9 @@ let expenses = [];
 let recurringRules = [];
 let selectedCatId = null;
 let isRecurring = false;
+let recurFrequency = 'daily';       // 'daily' | 'weekly' | 'monthly'
+let recurWeekDays = [0,1,2,3,4,5,6]; // 0=Sun … 6=Sat (for weekly)
+let recurDayOfMonth = 1;             // 1-31 (for monthly)
 let editingExpense = null;
 let currentView = 'daily';
 let currentMonth = new Date();
@@ -1281,7 +1368,7 @@ async function autoLogRecurring() {
 
   for (const rule of recurringRules) {
     const ruleStart = new Date(rule.created_at).toISOString().split('T')[0];
-    const ruleDates = dates.filter(d => d >= ruleStart);
+    const ruleDates = dates.filter(d => d >= ruleStart && ruleShouldRunOnDate(rule, d));
     for (const date of ruleDates) {
       const already = expenses.find(e =>
         e.recurring_rule_id === rule.id && e.date === date
@@ -1350,9 +1437,11 @@ function renderRecurringStrip() {
 
     const chip = document.createElement('div');
     chip.className = `recur-chip ${exp ? (isSkipped ? 'skipped' : 'pending') : 'pending'}`;
+    const freqBadge = rule.frequency === 'weekly' ? 'Wk' : rule.frequency === 'monthly' ? 'Mo' : '';
     chip.innerHTML = `
       <div class="recur-dot ${isSkipped ? 'skipped' : ''}"></div>
       <div class="recur-chip-name">${cat.name}</div>
+      ${freqBadge ? `<div style="font-size:9px;color:var(--text3);font-weight:600;border:1px solid var(--border2);border-radius:4px;padding:1px 4px">${freqBadge}</div>` : ''}
       <div class="recur-chip-amt">₹${rule.amount}</div>
     `;
     if (exp) chip.onclick = () => openEditSheet(exp);
@@ -1535,6 +1624,131 @@ function updateCatGrid() {
 function toggleRecurring() {
   isRecurring = !isRecurring;
   document.getElementById('recurring-toggle-sw').classList.toggle('on', isRecurring);
+  const picker = document.getElementById('freq-picker');
+  if (isRecurring) {
+    picker.classList.add('show');
+    initFreqPicker();
+  } else {
+    picker.classList.remove('show');
+  }
+}
+
+function initFreqPicker() {
+  recurFrequency = 'daily';
+  recurWeekDays  = [0,1,2,3,4,5,6];
+  recurDayOfMonth = 1;
+  // Reset tab buttons
+  document.querySelectorAll('.freq-tab').forEach((t,i) => {
+    t.classList.toggle('active', i === 0);
+  });
+  document.getElementById('freq-days-row').classList.remove('show');
+  document.getElementById('freq-dom-row').classList.remove('show');
+  buildDomPicker();
+  updateFreqHint();
+}
+
+function setFrequency(freq) {
+  recurFrequency = freq;
+  document.querySelectorAll('.freq-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.toLowerCase() === freq);
+  });
+  document.getElementById('freq-days-row').classList.toggle('show', freq === 'weekly');
+  document.getElementById('freq-dom-row').classList.toggle('show', freq === 'monthly');
+  updateFreqHint();
+}
+
+function toggleWeekDay(day) {
+  const idx = recurWeekDays.indexOf(day);
+  if (idx >= 0) {
+    if (recurWeekDays.length === 1) return; // keep at least one
+    recurWeekDays.splice(idx, 1);
+  } else {
+    recurWeekDays.push(day);
+  }
+  // re-render day buttons
+  const btns = document.querySelectorAll('.freq-day-btn');
+  btns.forEach((btn, i) => btn.classList.toggle('active', recurWeekDays.includes(i)));
+  updateFreqHint();
+}
+
+function buildDomPicker() {
+  const row = document.getElementById('freq-dom-row');
+  row.innerHTML = '';
+  for (let d = 1; d <= 31; d++) {
+    const btn = document.createElement('button');
+    btn.className = 'freq-dom-btn' + (d === recurDayOfMonth ? ' active' : '');
+    btn.textContent = d;
+    btn.onclick = () => {
+      recurDayOfMonth = d;
+      document.querySelectorAll('.freq-dom-btn').forEach((b,i) => b.classList.toggle('active', i+1 === d));
+      updateFreqHint();
+    };
+    row.appendChild(btn);
+  }
+}
+
+const DAY_NAMES  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAY_NAMES_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function ordinal(n) {
+  const s = ['th','st','nd','rd'], v = n % 100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
+}
+
+function updateFreqHint() {
+  const hint = document.getElementById('freq-hint');
+  if (!hint) return;
+  if (recurFrequency === 'daily') {
+    hint.textContent = 'Logs every day automatically';
+  } else if (recurFrequency === 'weekly') {
+    const sorted = [...recurWeekDays].sort();
+    const names = sorted.map(d => DAY_NAMES[d]).join(', ');
+    hint.textContent = 'Logs every ' + names;
+  } else {
+    hint.textContent = 'Logs on the ' + ordinal(recurDayOfMonth) + ' of every month';
+  }
+  // Also update the toggle sub-text
+  const sub = document.getElementById('recurring-toggle-sub');
+  if (sub) sub.textContent = hint.textContent;
+}
+
+// ── FREQUENCY LABEL HELPER ──
+function formatFrequencyLabel(rule) {
+  const freq = rule.frequency || 'daily';
+  if (freq === 'daily') return 'Daily';
+  if (freq === 'weekly') {
+    const days = rule.week_days ? JSON.parse(rule.week_days) : [0,1,2,3,4,5,6];
+    if (days.length === 7) return 'Weekly (every day)';
+    const sorted = [...days].sort();
+    return 'Weekly · ' + sorted.map(d => DAY_NAMES[d]).join(', ');
+  }
+  if (freq === 'monthly') {
+    return 'Monthly · ' + ordinal(rule.day_of_month || 1);
+  }
+  return freq;
+}
+
+// ── FREQUENCY MATCHING HELPERS (used in autoLogRecurring) ──
+function ruleShouldRunOnDate(rule, dateStr) {
+  const freq = rule.frequency || 'daily';
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayOfWeek   = d.getDay();   // 0=Sun
+  const dayOfMonth  = d.getDate();  // 1-31
+
+  if (freq === 'daily') return true;
+
+  if (freq === 'weekly') {
+    const days = rule.week_days ? JSON.parse(rule.week_days) : [0,1,2,3,4,5,6];
+    return days.includes(dayOfWeek);
+  }
+
+  if (freq === 'monthly') {
+    const dom = rule.day_of_month || 1;
+    // Handle months shorter than dom: fire on last day
+    const lastDay = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    return dayOfMonth === Math.min(dom, lastDay);
+  }
+
+  return true;
 }
 
 function toggleAddSheet() {
@@ -1547,6 +1761,8 @@ function toggleAddSheet() {
     document.getElementById('add-amount').value = '';
     document.getElementById('add-note').value = '';
     document.getElementById('recurring-toggle-sw').classList.remove('on');
+    document.getElementById('freq-picker').classList.remove('show');
+    isRecurring = false; recurFrequency = 'daily';
     // Reset milk qty fields
     document.getElementById('milk-qty').value = '';
     document.getElementById('milk-rate').value = '';
@@ -1582,9 +1798,13 @@ async function submitExpense() {
   let ruleId = null;
 
   if (isRecurring) {
-    const { data: rule } = await sb.from('recurring_rules').insert({
-      user_id: uid, category_id: selectedCatId, amount, frequency: 'daily'
-    }).select().single();
+    const rulePayload = {
+      user_id: uid, category_id: selectedCatId, amount,
+      frequency: recurFrequency,
+      week_days: recurFrequency === 'weekly'  ? JSON.stringify(recurWeekDays) : null,
+      day_of_month: recurFrequency === 'monthly' ? recurDayOfMonth : null,
+    };
+    const { data: rule } = await sb.from('recurring_rules').insert(rulePayload).select().single();
     if (rule) { recurringRules.push(rule); ruleId = rule.id; }
   }
 
@@ -1738,7 +1958,7 @@ function renderManageLists() {
     el.innerHTML = `
       <div class="manage-item-info">
         <div class="manage-item-name">${cat?.name || 'Unknown'}</div>
-        <div class="manage-item-sub">₹${rule.amount} · Daily</div>
+        <div class="manage-item-sub">₹${rule.amount} · ${formatFrequencyLabel(rule)}</div>
       </div>
       <div class="manage-item-actions">
         <button class="mini-btn del" onclick="deleteRule('${rule.id}')">
