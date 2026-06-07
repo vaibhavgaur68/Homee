@@ -1032,15 +1032,23 @@ async function autoLogRecurring() {
   const uid = currentUser.id;
   const today = todayStr();
 
-  // Get dates that need catch-up (up to 7 days back)
+  // Get ALL dates from rule creation date up to today (unlimited catch-up)
   const dates = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    dates.push(d.toISOString().split('T')[0]);
+  for (const rule of recurringRules) {
+    const start = new Date(rule.created_at);
+    start.setHours(0,0,0,0);
+    const end = new Date();
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const str = d.toISOString().split('T')[0];
+      if (!dates.includes(str)) dates.push(str);
+    }
   }
+  dates.sort();
 
   for (const rule of recurringRules) {
-    for (const date of dates) {
+    const ruleStart = new Date(rule.created_at).toISOString().split('T')[0];
+    const ruleDates = dates.filter(d => d >= ruleStart);
+    for (const date of ruleDates) {
       const already = expenses.find(e =>
         e.recurring_rule_id === rule.id && e.date === date
       );
