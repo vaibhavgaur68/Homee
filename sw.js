@@ -1,211 +1,158 @@
 /* ═══════════════════════════════════════════════════════
-   HOMEE SERVICE WORKER  v2
-   Strategy: Cache-first for everything local.
-   The "webpage not reached" screen will never appear
-   once the app has been opened once with internet.
+   HOMEE SERVICE WORKER v3
+   Strategy: Network-only. No caching at all.
+   If offline → show a branded "connect to internet" page.
    ═══════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'homee-v2';
-
-// Everything the app needs to run — cached on first install
-const PRECACHE = [
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-72.png',
-  '/icons/icon-96.png',
-  '/icons/icon-128.png',
-  '/icons/icon-144.png',
-  '/icons/icon-152.png',
-  '/icons/icon-192.png',
-  '/icons/icon-384.png',
-  '/icons/icon-512.png',
-  // Supabase JS — cached so app JS works offline
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-  // Google Fonts CSS
-  'https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap',
-];
-
 // ── INSTALL ───────────────────────────────────────────────
-// Open cache, pre-fetch every asset. skipWaiting so the new
-// SW takes control immediately without waiting for a reload.
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(async cache => {
-      // Cache each asset individually so one failure doesn't
-      // block the whole install
-      await Promise.allSettled(
-        PRECACHE.map(url =>
-          cache.add(url).catch(err =>
-            console.warn('[SW] Precache miss (needs internet first):', url)
-          )
-        )
-      );
-    }).then(() => self.skipWaiting())
-  );
-});
+// Nothing to cache. Just take control immediately.
+self.addEventListener('install', () => self.skipWaiting());
 
 // ── ACTIVATE ─────────────────────────────────────────────
-// Delete every old homee-* cache so stale files don't linger
+// Wipe every old homee-* cache left from previous SW versions.
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys
-          .filter(k => k.startsWith('homee-') && k !== CACHE_NAME)
-          .map(k => caches.delete(k))
+        keys.filter(k => k.startsWith('homee-')).map(k => caches.delete(k))
       ))
-      .then(() => self.clients.claim())  // take control of all open tabs immediately
+      .then(() => self.clients.claim())
   );
 });
 
 // ── FETCH ─────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
   const { request } = event;
-  const url = new URL(request.url);
 
-  // Only handle GET
+  // Only intercept GET navigation requests (page loads).
+  // Let all other requests (API, fonts, scripts) go straight
+  // to the network untouched — no redirects, no interference.
   if (request.method !== 'GET') return;
+  if (request.mode !== 'navigate') return;
 
-  // Ignore browser extensions
-  if (!url.protocol.startsWith('http')) return;
-
-  // ── Supabase API calls → always network, never cache ──
-  // If offline, the app's own JS catches the error and shows
-  // cached data from localStorage — SW stays out of the way
-  if (url.hostname.includes('supabase.co')) {
-    event.respondWith(networkOnly(request));
-    return;
-  }
-
-  // ── Google font FILES (.woff2 etc) → cache-first ──────
-  if (url.hostname === 'fonts.gstatic.com') {
-    event.respondWith(cacheFirst(request));
-    return;
-  }
-
-  // ── Everything else → cache-first, update in background ─
-  // This covers: index.html, manifest, icons, Supabase JS,
-  // Font CSS, and any other local asset
-  event.respondWith(cacheFirstWithRefresh(request));
+  event.respondWith(
+    fetch(request).catch(() => offlinePage())
+  );
 });
 
-// ── STRATEGY: Cache-first, refresh cache in background ───
-// Serve from cache instantly. Also fetch network in background
-// and update cache so next visit gets fresh content.
-async function cacheFirstWithRefresh(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-
-  // Kick off a background network fetch to keep cache fresh
-  const networkFetch = fetch(request)
-    .then(response => {
-      if (response.ok) cache.put(request, response.clone());
-      return response;
-    })
-    .catch(() => null); // silently fail if offline
-
-  // Return cached immediately if we have it
-  if (cached) return cached;
-
-  // Not in cache yet — wait for network (first visit)
-  try {
-    const response = await networkFetch;
-    if (response) return response;
-  } catch (_) {}
-
-  // Last resort: return offline fallback page
-  return offlineFallback(request);
-}
-
-// ── STRATEGY: Network only (Supabase API) ─────────────────
-async function networkOnly(request) {
-  try {
-    return await fetch(request);
-  } catch (err) {
-    // Return a proper JSON error so the app JS can handle it
-    // gracefully instead of crashing
-    return new Response(
-      JSON.stringify({ error: 'offline', message: 'No internet connection' }),
-      { status: 503, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-}
-
-// ── STRATEGY: Strict cache-first (fonts) ─────────────────
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (_) {
-    return new Response('', { status: 503 });
-  }
-}
-
-// ── OFFLINE FALLBACK ──────────────────────────────────────
-// If nothing is cached at all (truly first visit, no internet)
-// show a clean branded offline page instead of browser error
-async function offlineFallback(request) {
-  // For navigation requests, return a branded offline page
-  if (request.destination === 'document') {
-    return new Response(`<!DOCTYPE html>
+// ── OFFLINE PAGE ──────────────────────────────────────────
+function offlinePage() {
+  return new Response(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f0f0f">
-<title>Homee — Offline</title>
+<title>Homee — No Connection</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background:#0f0f0f; color:#f0ede8;
-    font-family: -apple-system, sans-serif;
-    height:100dvh; display:flex; flex-direction:column;
-    align-items:center; justify-content:center;
-    text-align:center; padding:32px;
+    background: #0f0f0f;
+    color: #f0ede8;
+    font-family: -apple-system, 'DM Sans', sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px 24px;
+    padding-bottom: calc(32px + env(safe-area-inset-bottom));
   }
   .icon {
-    width:72px; height:72px; border-radius:18px;
-    background:#1a1a1a; border:1px solid #2a2a2a;
-    display:flex; align-items:center; justify-content:center;
-    margin:0 auto 24px;
+    width: 72px; height: 72px;
+    border-radius: 20px;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 28px;
   }
-  h1 { font-size:28px; color:#e8d5a3; margin-bottom:8px; letter-spacing:-0.5px; }
-  p  { font-size:14px; color:#5a5550; line-height:1.6; max-width:260px; }
-  .sub { margin-top:32px; font-size:12px; color:#3a3530; }
+  h1 {
+    font-size: 32px;
+    color: #e8d5a3;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+    font-weight: 400;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #5a5550;
+    margin-bottom: 40px;
+    font-weight: 300;
+  }
+  .card {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 16px;
+    padding: 24px 28px;
+    max-width: 320px;
+    width: 100%;
+    margin-bottom: 24px;
+  }
+  .wifi-icon {
+    margin: 0 auto 16px;
+    opacity: 0.25;
+  }
+  .card h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f0ede8;
+    margin-bottom: 8px;
+  }
+  .card p {
+    font-size: 13px;
+    color: #5a5550;
+    line-height: 1.6;
+  }
   button {
-    margin-top:24px; padding:12px 28px;
-    background:#e8d5a3; color:#1a1000;
-    border:none; border-radius:10px;
-    font-size:14px; font-weight:600;
-    cursor:pointer;
+    padding: 13px 32px;
+    background: #e8d5a3;
+    color: #1a1000;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.1px;
   }
+  button:active { opacity: 0.85; transform: scale(0.98); }
 </style>
 </head>
 <body>
   <div class="icon">
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e8d5a3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+         stroke="#e8d5a3" stroke-width="1.8"
+         stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
   </div>
+
   <h1>Homee</h1>
-  <p>You're offline. Connect to the internet and reopen the app.</p>
-  <button onclick="location.reload()">Try Again</button>
-  <p class="sub">Once loaded once, Homee works fully offline.</p>
+  <p class="subtitle">Daily expense tracking, refined</p>
+
+  <div class="card">
+    <svg class="wifi-icon" width="48" height="48" viewBox="0 0 24 24" fill="none"
+         stroke="#f0ede8" stroke-width="1.5"
+         stroke-linecap="round" stroke-linejoin="round">
+      <line x1="1" y1="1" x2="23" y2="23"/>
+      <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+      <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+      <path d="M10.71 5.05A16 16 0 0 1 22.56 9"/>
+      <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+      <line x1="12" y1="20" x2="12.01" y2="20"/>
+    </svg>
+    <h2>No internet connection</h2>
+    <p>Connect to Wi-Fi or mobile data, then tap retry to open Homee.</p>
+  </div>
+
+  <button onclick="location.reload()">Retry</button>
 </body>
 </html>`, {
-      status: 200,
-      headers: { 'Content-Type': 'text/html' }
-    });
-  }
-
-  return new Response('', { status: 503 });
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
 }
 
 // ── PUSH NOTIFICATIONS ────────────────────────────────────
