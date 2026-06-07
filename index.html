@@ -1218,6 +1218,7 @@ function renderRecurringStrip() {
       <div class="recur-chip-amt">₹${rule.amount}</div>
     `;
     if (exp) chip.onclick = () => openEditSheet(exp);
+    else chip.onclick = () => showToast('Not logged yet — check back shortly');
     row.appendChild(chip);
   }
 }
@@ -1450,10 +1451,10 @@ async function submitExpense() {
 
 // ── EDIT EXPENSE ──
 function openEditSheet(exp) {
-  editingExpense = exp;
+  openSheet('edit-sheet');       // open first (closeAllSheets inside resets editingExpense)
+  editingExpense = exp;          // reassign AFTER the wipe so buttons can read it
   document.getElementById('edit-amount').value = exp.amount;
   document.getElementById('edit-note').value = exp.note || '';
-  openSheet('edit-sheet');
 }
 
 async function saveEdit() {
