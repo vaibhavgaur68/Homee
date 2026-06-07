@@ -610,6 +610,92 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+  /* ── MILK QUANTITY ROW ── */
+  .qty-row {
+    display: none; gap: 8px; margin-bottom: 16px; align-items: flex-end;
+  }
+  .qty-row.show { display: flex; }
+  .qty-field { flex: 1; }
+  .qty-label {
+    font-size: 10px; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;
+  }
+  .qty-input {
+    width: 100%; padding: 10px 12px;
+    background: var(--bg); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-family: var(--font-body); font-size: 15px; outline: none;
+    -webkit-appearance: none;
+  }
+  .qty-input:focus { border-color: var(--accent2); }
+  .qty-input::placeholder { color: var(--text3); }
+  .qty-sep {
+    font-size: 18px; color: var(--text3); padding-bottom: 10px; flex-shrink: 0;
+  }
+  .qty-calc-hint {
+    font-size: 11px; color: var(--accent2); margin-bottom: 12px;
+    display: none; text-align: center; font-weight: 500;
+  }
+  .qty-calc-hint.show { display: block; }
+
+  /* ── CONFIRM DIALOG ── */
+  .confirm-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 800; display: flex; align-items: center; justify-content: center;
+    padding: 24px; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s; backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .confirm-overlay.show { opacity: 1; pointer-events: all; }
+  .confirm-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 28px 24px; width: 100%; max-width: 340px;
+    animation: cardIn 0.25s ease;
+  }
+  .confirm-icon {
+    width: 48px; height: 48px; border-radius: 14px;
+    background: rgba(224,112,112,0.12); border: 1px solid rgba(224,112,112,0.25);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px; color: var(--danger);
+  }
+  .confirm-title {
+    font-family: var(--font-display); font-size: 22px; color: var(--text);
+    text-align: center; margin-bottom: 8px;
+  }
+  .confirm-body {
+    font-size: 13px; color: var(--text3); text-align: center;
+    line-height: 1.5; margin-bottom: 24px;
+  }
+  .confirm-actions { display: flex; flex-direction: column; gap: 8px; }
+  .confirm-cancel {
+    padding: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border2); background: transparent;
+    color: var(--text2); font-family: var(--font-body); font-size: 14px;
+    font-weight: 500; cursor: pointer; transition: all 0.15s;
+  }
+  .confirm-cancel:active { background: var(--surface2); }
+  .confirm-delete {
+    padding: 13px; border-radius: var(--radius-sm);
+    border: none; background: var(--danger);
+    color: #fff; font-family: var(--font-body); font-size: 14px;
+    font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .confirm-delete:active { opacity: 0.85; transform: scale(0.98); }
+
+  /* ── DANGER ZONE ── */
+  .danger-zone {
+    margin-top: 8px; padding: 16px;
+    background: rgba(224,112,112,0.06); border: 1px solid rgba(224,112,112,0.2);
+    border-radius: var(--radius-sm);
+  }
+  .danger-zone-title {
+    font-size: 11px; font-weight: 600; color: var(--danger);
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;
+  }
+  .danger-zone-sub {
+    font-size: 12px; color: var(--text3); margin-bottom: 14px; line-height: 1.4;
+  }
+
   /* ── MONTH CATEGORY SHEET ── */
   .month-detail-item {
     display: flex; align-items: center; gap: 10px;
@@ -791,6 +877,19 @@
   <div class="sheet-body">
     <div class="form-label" style="margin-bottom:10px">Category</div>
     <div class="cat-grid" id="cat-grid"></div>
+    <!-- Milk qty calculator (visible only when Milk is selected) -->
+    <div class="qty-row" id="milk-qty-row">
+      <div class="qty-field">
+        <div class="qty-label">Qty (litres)</div>
+        <input class="qty-input" type="number" id="milk-qty" placeholder="1.5" inputmode="decimal" oninput="calcMilkTotal()">
+      </div>
+      <div class="qty-sep">×</div>
+      <div class="qty-field">
+        <div class="qty-label">Rate (₹/litre)</div>
+        <input class="qty-input" type="number" id="milk-rate" placeholder="60" inputmode="decimal" oninput="calcMilkTotal()">
+      </div>
+    </div>
+    <div class="qty-calc-hint" id="milk-calc-hint"></div>
     <div class="amount-row">
       <div class="amount-prefix">₹</div>
       <input class="amount-input" type="number" id="add-amount" placeholder="0" inputmode="decimal">
@@ -824,6 +923,19 @@
         <input class="amount-input" type="number" id="edit-amount" placeholder="0" inputmode="decimal">
       </div>
     </div>
+    <!-- Milk qty calculator in edit sheet -->
+    <div class="qty-row" id="edit-milk-qty-row" style="margin-top:12px">
+      <div class="qty-field">
+        <div class="qty-label">Qty (litres)</div>
+        <input class="qty-input" type="number" id="edit-milk-qty" placeholder="1.5" inputmode="decimal" oninput="calcEditMilkTotal()">
+      </div>
+      <div class="qty-sep">×</div>
+      <div class="qty-field">
+        <div class="qty-label">Rate (₹/litre)</div>
+        <input class="qty-input" type="number" id="edit-milk-rate" placeholder="60" inputmode="decimal" oninput="calcEditMilkTotal()">
+      </div>
+    </div>
+    <div class="qty-calc-hint" id="edit-milk-calc-hint"></div>
     <div class="form-group" style="margin-top:16px">
       <label class="form-label">Note</label>
       <input class="note-input" type="text" id="edit-note" placeholder="Note (optional)" style="margin-bottom:0">
@@ -863,6 +975,17 @@
       <div class="manage-title">Your Categories</div>
       <div id="categories-list"></div>
     </div>
+    <!-- Danger Zone -->
+    <div class="manage-section">
+      <div class="manage-title" style="color:var(--danger)">Danger Zone</div>
+      <div class="danger-zone">
+        <div class="danger-zone-title">Delete All App Data</div>
+        <div class="danger-zone-sub">Permanently removes all your expenses, recurring rules, and categories. This cannot be undone.</div>
+        <button class="btn-danger" style="width:100%" onclick="confirmDeleteAllData()">
+          Delete Everything
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -880,6 +1003,21 @@
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+
+<!-- DELETE ALL DATA CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirm-delete-all">
+  <div class="confirm-card">
+    <div class="confirm-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+    </div>
+    <div class="confirm-title">Delete Everything?</div>
+    <div class="confirm-body">This will permanently delete all your expenses, recurring rules, and categories. There is no way to recover this data.</div>
+    <div class="confirm-actions">
+      <button class="confirm-delete" onclick="executeDeleteAllData()">Yes, Delete Everything</button>
+      <button class="confirm-cancel" onclick="closeConfirmDialog()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- PWA INSTALL BANNER -->
 <div class="install-banner" id="install-banner">
@@ -1389,7 +1527,7 @@ function updateCatGrid() {
       <div style="color:${color}">${icon}</div>
       <div class="cat-btn-label">${cat.name}</div>
     `;
-    btn.onclick = () => { selectedCatId = cat.id; updateCatGrid(); };
+    btn.onclick = () => { selectedCatId = cat.id; updateCatGrid(); toggleMilkQtyRow(cat.id); };
     grid.appendChild(btn);
   }
 }
@@ -1409,7 +1547,14 @@ function toggleAddSheet() {
     document.getElementById('add-amount').value = '';
     document.getElementById('add-note').value = '';
     document.getElementById('recurring-toggle-sw').classList.remove('on');
+    // Reset milk qty fields
+    document.getElementById('milk-qty').value = '';
+    document.getElementById('milk-rate').value = '';
+    const mHint = document.getElementById('milk-calc-hint');
+    if (mHint) { mHint.textContent = ''; mHint.classList.remove('show'); }
+    document.getElementById('milk-qty-row').classList.remove('show');
     updateCatGrid();
+    toggleMilkQtyRow(selectedCatId);
     openSheet('add-sheet');
   }
   document.getElementById('fab').classList.toggle('open', sheet.classList.contains('open'));
@@ -1420,6 +1565,18 @@ async function submitExpense() {
   const note = document.getElementById('add-note').value.trim();
   if (!selectedCatId) return showToast('Pick a category first');
   if (!amount || amount <= 0) return showToast('Enter a valid amount');
+
+  // If Milk category, encode qty/rate into the note for later recall
+  const milkId = getMilkCatId();
+  if (milkId && selectedCatId === milkId) {
+    const mQty  = parseFloat(document.getElementById('milk-qty').value)  || 0;
+    const mRate = parseFloat(document.getElementById('milk-rate').value) || 0;
+    if (mQty > 0 && mRate > 0 && !note) {
+      // Store as structured note only if user didn't type their own note
+      document.getElementById('add-note').value = mQty + 'L @' + mRate;
+    }
+  }
+  const noteFinal = document.getElementById('add-note').value.trim();
 
   const uid = currentUser.id;
   let ruleId = null;
@@ -1433,7 +1590,7 @@ async function submitExpense() {
 
   const expData = {
     user_id: uid, category_id: selectedCatId, amount,
-    note, date: todayStr(), source: 'manual', status: 'confirmed',
+    note: noteFinal, date: todayStr(), source: 'manual', status: 'confirmed',
     recurring_rule_id: ruleId
   };
 
@@ -1455,6 +1612,31 @@ function openEditSheet(exp) {
   editingExpense = exp;          // reassign AFTER the wipe so buttons can read it
   document.getElementById('edit-amount').value = exp.amount;
   document.getElementById('edit-note').value = exp.note || '';
+
+  // Show milk qty calculator if this is a milk expense
+  const milkId = getMilkCatId();
+  const editRow  = document.getElementById('edit-milk-qty-row');
+  const editHint = document.getElementById('edit-milk-calc-hint');
+  if (milkId && exp.category_id === milkId) {
+    editRow.classList.add('show');
+    // Pre-populate qty/rate if stored in note as "Xqty Yrate"
+    const m = (exp.note || '').match(/^(\d+(?:\.\d+)?)L @(\d+(?:\.\d+)?)$/);
+    if (m) {
+      document.getElementById('edit-milk-qty').value  = m[1];
+      document.getElementById('edit-milk-rate').value = m[2];
+      if (editHint) {
+        editHint.textContent = m[1] + 'L × ₹' + m[2] + ' = ₹' + exp.amount;
+        editHint.classList.add('show');
+      }
+    } else {
+      document.getElementById('edit-milk-qty').value  = '';
+      document.getElementById('edit-milk-rate').value = '';
+      if (editHint) { editHint.textContent = ''; editHint.classList.remove('show'); }
+    }
+  } else {
+    if (editRow)  editRow.classList.remove('show');
+    if (editHint) { editHint.textContent = ''; editHint.classList.remove('show'); }
+  }
 }
 
 async function saveEdit() {
@@ -1463,7 +1645,17 @@ async function saveEdit() {
   const note = document.getElementById('edit-note').value.trim();
   if (!amount || amount <= 0) return showToast('Enter a valid amount');
 
-  const updates = { amount, note, status: editingExpense.source === 'auto' ? 'edited' : 'confirmed' };
+  // If Milk, encode qty/rate into note when fields are filled
+  let noteFinal = note;
+  const milkId = getMilkCatId();
+  if (milkId && editingExpense.category_id === milkId) {
+    const mQty  = parseFloat(document.getElementById('edit-milk-qty').value)  || 0;
+    const mRate = parseFloat(document.getElementById('edit-milk-rate').value) || 0;
+    if (mQty > 0 && mRate > 0 && !note) {
+      noteFinal = mQty + 'L @' + mRate;
+    }
+  }
+  const updates = { amount, note: noteFinal, status: editingExpense.source === 'auto' ? 'edited' : 'confirmed' };
   const { error } = await sb.from('expenses').update(updates).eq('id', editingExpense.id);
   if (!error) {
     const idx = expenses.findIndex(e => e.id === editingExpense.id);
@@ -1593,6 +1785,96 @@ async function deleteRule(id) {
     renderManageLists(); renderRecurringStrip();
     localCache.rules = recurringRules; saveCache();
     showToast('Recurring rule removed');
+  }
+}
+
+// ── MILK QUANTITY CALCULATOR ──
+// Returns the id of the "Milk" category (case-insensitive match on name)
+function getMilkCatId() {
+  const cat = categories.find(c => c.name.toLowerCase() === 'milk');
+  return cat ? cat.id : null;
+}
+
+function toggleMilkQtyRow(catId, prefix = '') {
+  const milkId = getMilkCatId();
+  const isAdd = prefix === '';
+  const rowId   = isAdd ? 'milk-qty-row'      : 'edit-milk-qty-row';
+  const hintId  = isAdd ? 'milk-calc-hint'    : 'edit-milk-calc-hint';
+  const row  = document.getElementById(rowId);
+  const hint = document.getElementById(hintId);
+  if (!row) return;
+  if (milkId && catId === milkId) {
+    row.classList.add('show');
+  } else {
+    row.classList.remove('show');
+    if (hint) { hint.textContent = ''; hint.classList.remove('show'); }
+    // clear fields
+    const qtyEl  = document.getElementById(isAdd ? 'milk-qty'  : 'edit-milk-qty');
+    const rateEl = document.getElementById(isAdd ? 'milk-rate' : 'edit-milk-rate');
+    if (qtyEl)  qtyEl.value  = '';
+    if (rateEl) rateEl.value = '';
+  }
+}
+
+function calcMilkTotal() {
+  const qty  = parseFloat(document.getElementById('milk-qty').value)  || 0;
+  const rate = parseFloat(document.getElementById('milk-rate').value) || 0;
+  const hint = document.getElementById('milk-calc-hint');
+  if (qty > 0 && rate > 0) {
+    const total = qty * rate;
+    document.getElementById('add-amount').value = total.toFixed(2);
+    hint.textContent = qty + 'L × ₹' + rate + ' = ₹' + total.toFixed(2);
+    hint.classList.add('show');
+  } else {
+    hint.textContent = ''; hint.classList.remove('show');
+  }
+}
+
+function calcEditMilkTotal() {
+  const qty  = parseFloat(document.getElementById('edit-milk-qty').value)  || 0;
+  const rate = parseFloat(document.getElementById('edit-milk-rate').value) || 0;
+  const hint = document.getElementById('edit-milk-calc-hint');
+  if (qty > 0 && rate > 0) {
+    const total = qty * rate;
+    document.getElementById('edit-amount').value = total.toFixed(2);
+    hint.textContent = qty + 'L × ₹' + rate + ' = ₹' + total.toFixed(2);
+    hint.classList.add('show');
+  } else {
+    hint.textContent = ''; hint.classList.remove('show');
+  }
+}
+
+// ── DELETE ALL DATA ──
+function confirmDeleteAllData() {
+  document.getElementById('confirm-delete-all').classList.add('show');
+}
+
+function closeConfirmDialog() {
+  document.getElementById('confirm-delete-all').classList.remove('show');
+}
+
+async function executeDeleteAllData() {
+  closeConfirmDialog();
+  const uid = currentUser.id;
+  showToast('Deleting all data…');
+
+  try {
+    // Delete in order: expenses → recurring_rules → categories
+    await sb.from('expenses').delete().eq('user_id', uid);
+    await sb.from('recurring_rules').delete().eq('user_id', uid);
+    await sb.from('categories').delete().eq('user_id', uid);
+
+    // Reset local state and cache
+    expenses = []; recurringRules = []; categories = [];
+    localCache = { expenses: [], categories: [], rules: [] };
+    saveCache();
+
+    closeAllSheets();
+    renderAll();
+    showToast('All data deleted');
+  } catch (err) {
+    console.error('Delete all error:', err);
+    showToast('Delete failed — try again');
   }
 }
 
