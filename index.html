@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ledger — Daily Expenses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #222222;
+    --border: #2a2a2a;
+    --border2: #333333;
+    --text: #f0ede8;
+    --text2: #9a9590;
+    --text3: #5a5550;
+    --accent: #e8d5a3;
+    --accent2: #c4a96d;
+    --accent-dim: rgba(232,213,163,0.1);
+    --danger: #e07070;
+    --success: #70c490;
+    --warning: #e0b070;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --font-display: 'DM Serif Display', serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* ── APP SHELL ── */
+  #app { height: 100dvh; display: flex; flex-direction: column; position: relative; }
+
+  /* ── SCREENS ── */
+  .screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(12px);
+  }
+  .screen.active {
+    opacity: 1; pointer-events: all; transform: translateY(0);
+  }
+
+  /* ── AUTH SCREEN ── */
+  #auth-screen {
+    justify-content: center; align-items: center;
+    padding: 32px 24px;
+    background: var(--bg);
+  }
+  .auth-bg {
+    position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  }
+  .auth-bg::before {
+    content: '';
+    position: absolute;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(232,213,163,0.06) 0%, transparent 70%);
+    top: -100px; left: 50%; transform: translateX(-50%);
+    border-radius: 50%;
+  }
+  .auth-card {
+    width: 100%; max-width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px 32px;
+    position: relative;
+    animation: cardIn 0.5s ease;
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .auth-logo {
+    text-align: center; margin-bottom: 32px;
+  }
+  .auth-logo h1 {
+    font-family: var(--font-display);
+    font-size: 36px; color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+  .auth-logo p {
+    color: var(--text3); font-size: 13px; margin-top: 4px; font-weight: 300;
+  }
+  .auth-tabs {
+    display: flex; background: var(--bg);
+    border-radius: var(--radius-sm); padding: 3px;
+    margin-bottom: 28px;
+  }
+  .auth-tab {
+    flex: 1; padding: 8px;
+    text-align: center; font-size: 13px; font-weight: 500;
+    border-radius: 8px; cursor: pointer;
+    color: var(--text3); transition: all 0.2s;
+    border: none; background: none; font-family: var(--font-body);
+  }
+  .auth-tab.active { background: var(--surface2); color: var(--text); }
+
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    display: block; font-size: 11px; font-weight: 600;
+    color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+  .form-input {
+    width: 100%; padding: 12px 16px;
+    background: var(--bg); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-family: var(--font-body); font-size: 15px;
+    outline: none; transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+  .form-input:focus { border-color: var(--accent2); }
+  .form-input::placeholder { color: var(--text3); }
+
+  .btn-primary {
+    width: 100%; padding: 14px;
+    background: var(--accent); color: #1a1000;
+    border: none; border-radius: var(--radius-sm);
+    font-family: var(--font-body); font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+    margin-top: 8px;
+  }
+  .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .auth-error {
+    background: rgba(224,112,112,0.1); border: 1px solid rgba(224,112,112,0.3);
+    color: var(--danger); border-radius: var(--radius-sm);
+    padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
+    display: none;
+  }
+  .auth-error.show { display: block; }
+
+  /* ── MAIN APP ── */
+  #main-screen { background: var(--bg); }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    padding: calc(var(--safe-top) + 16px) 20px 0;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .topbar-left h2 {
+    font-family: var(--font-display);
+    font-size: 28px; color: var(--text);
+    letter-spacing: -0.3px; line-height: 1;
+  }
+  .topbar-left p { color: var(--text3); font-size: 12px; margin-top: 3px; font-weight: 400; }
+  .topbar-right { display: flex; gap: 8px; }
+  .icon-btn {
+    width: 38px; height: 38px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.15s; color: var(--text2);
+    flex-shrink: 0;
+  }
+  .icon-btn:active { transform: scale(0.93); background: var(--surface2); }
+
+  /* ── WAKE-UP BANNER ── */
+  .wake-banner {
+    margin: 12px 20px 0;
+    background: rgba(232,213,163,0.08); border: 1px solid rgba(232,213,163,0.2);
+    border-radius: var(--radius-sm); padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--accent); display: none;
+  }
+  .wake-banner.show { display: flex; }
+  .wake-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); flex-shrink: 0;
+    animation: pulse 1s ease infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* ── SUMMARY CARD ── */
+  .summary-wrap { padding: 16px 20px 0; flex-shrink: 0; }
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    position: relative; overflow: hidden;
+  }
+  .summary-card::before {
+    content: '';
+    position: absolute; top: -40px; right: -40px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, rgba(232,213,163,0.08) 0%, transparent 70%);
+    border-radius: 50%; pointer-events: none;
+  }
+  .summary-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; }
+  .summary-amount {
+    font-family: var(--font-display);
+    font-size: 42px; color: var(--text);
+    letter-spacing: -1px; line-height: 1.1; margin-top: 4px;
+  }
+  .summary-amount span { font-size: 22px; color: var(--text2); font-family: var(--font-body); font-weight: 300; }
+  .summary-row { display: flex; justify-content: space-between; align-items: flex-end; }
+  .summary-meta { display: flex; gap: 16px; margin-top: 14px; }
+  .summary-stat { }
+  .summary-stat-label { font-size: 10px; color: var(--text3); font-weight: 500; }
+  .summary-stat-val { font-size: 14px; font-weight: 600; color: var(--text2); margin-top: 1px; }
+
+  /* ── VIEW TOGGLE ── */
+  .view-toggle {
+    margin: 14px 20px 0;
+    display: flex; background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 3px;
+    flex-shrink: 0;
+  }
+  .view-btn {
+    flex: 1; padding: 7px; text-align: center;
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    border-radius: 8px; color: var(--text3);
+    transition: all 0.2s; border: none; background: none;
+    font-family: var(--font-body);
+  }
+  .view-btn.active { background: var(--surface2); color: var(--text); }
+
+  /* ── RECURRING STRIP ── */
+  .recurring-strip {
+    margin: 12px 20px 0; flex-shrink: 0;
+  }
+  .recurring-strip-label {
+    font-size: 10px; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;
+  }
+  .recurring-items {
+    display: flex; gap: 8px; overflow-x: auto;
+    scrollbar-width: none; padding-bottom: 2px;
+  }
+  .recurring-items::-webkit-scrollbar { display: none; }
+  .recur-chip {
+    flex-shrink: 0; display: flex; align-items: center; gap: 7px;
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 20px; padding: 6px 12px 6px 8px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .recur-chip.pending { border-color: rgba(232,213,163,0.3); }
+  .recur-chip.skipped { opacity: 0.45; }
+  .recur-chip:active { transform: scale(0.96); }
+  .recur-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .recur-dot.skipped { background: var(--text3); }
+  .recur-chip-name { font-size: 12px; font-weight: 500; color: var(--text2); }
+  .recur-chip-amt { font-size: 11px; color: var(--text3); }
+
+  /* ── EXPENSE LIST ── */
+  .list-wrap {
+    flex: 1; overflow-y: auto; padding: 12px 20px;
+    padding-bottom: calc(var(--safe-bottom) + 90px);
+    scrollbar-width: none;
+  }
+  .list-wrap::-webkit-scrollbar { display: none; }
+
+  .date-group { margin-bottom: 20px; }
+  .date-header {
+    font-size: 11px; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    margin-bottom: 8px; padding: 0 2px;
+  }
+
+  .expense-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px;
+    margin-bottom: 6px; cursor: pointer;
+    transition: all 0.15s;
+    animation: itemIn 0.3s ease;
+  }
+  @keyframes itemIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .expense-item:active { transform: scale(0.99); background: var(--surface2); }
+  .expense-item.skipped { opacity: 0.4; }
+  .expense-item.auto { border-left: 2px solid var(--accent2); }
+
+  .item-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .item-info { flex: 1; min-width: 0; }
+  .item-name { font-size: 14px; font-weight: 500; color: var(--text); }
+  .item-meta { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .item-right { text-align: right; flex-shrink: 0; }
+  .item-amount { font-size: 15px; font-weight: 600; color: var(--text); }
+  .item-status {
+    font-size: 10px; font-weight: 500; margin-top: 2px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .item-status.skipped { color: var(--danger); }
+  .item-status.auto { color: var(--accent2); }
+  .item-status.edited { color: var(--warning); }
+
+  /* skeleton */
+  .skeleton {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px;
+    margin-bottom: 6px; display: flex; gap: 12px; align-items: center;
+  }
+  .skel-circle { width: 36px; height: 36px; border-radius: 10px; background: var(--border2); flex-shrink: 0; animation: shimmer 1.4s ease infinite; }
+  .skel-lines { flex: 1; }
+  .skel-line { height: 10px; border-radius: 5px; background: var(--border2); animation: shimmer 1.4s ease infinite; }
+  .skel-line.short { width: 50%; margin-top: 8px; }
+  @keyframes shimmer { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+
+  /* empty state */
+  .empty-state {
+    text-align: center; padding: 48px 24px; color: var(--text3);
+  }
+  .empty-state svg { opacity: 0.3; margin-bottom: 16px; }
+  .empty-state p { font-size: 14px; }
+
+  /* ── FAB ── */
+  .fab {
+    position: fixed; bottom: calc(var(--safe-bottom) + 24px); right: 24px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--accent); border: none;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 100;
+    box-shadow: 0 8px 24px rgba(232,213,163,0.25);
+    transition: all 0.2s;
+    color: #1a1000;
+  }
+  .fab:active { transform: scale(0.93); }
+  .fab.open { transform: rotate(45deg); }
+
+  /* ── BOTTOM SHEET ── */
+  .sheet-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 200; opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .sheet-overlay.open { opacity: 1; pointer-events: all; }
+
+  .sheet {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-radius: 24px 24px 0 0;
+    border-top: 1px solid var(--border);
+    z-index: 300;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    padding-bottom: calc(var(--safe-bottom) + 24px);
+    max-height: 90dvh; overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .sheet::-webkit-scrollbar { display: none; }
+  .sheet.open { transform: translateY(0); }
+
+  .sheet-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: var(--border2); margin: 12px auto 0;
+  }
+  .sheet-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px 0;
+  }
+  .sheet-title { font-family: var(--font-display); font-size: 22px; color: var(--text); }
+  .sheet-close {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--surface2); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text2); transition: all 0.15s;
+  }
+  .sheet-close:active { transform: scale(0.93); }
+  .sheet-body { padding: 20px; }
+
+  /* category picker */
+  .cat-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-bottom: 20px;
+  }
+  .cat-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 12px 8px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1.5px solid transparent;
+    cursor: pointer; transition: all 0.15s;
+    font-family: var(--font-body);
+  }
+  .cat-btn.selected { border-color: var(--accent2); background: rgba(196,169,109,0.1); }
+  .cat-btn:active { transform: scale(0.96); }
+  .cat-btn-label { font-size: 10px; font-weight: 500; color: var(--text2); text-align: center; line-height: 1.2; }
+
+  .amount-row { display: flex; align-items: center; gap: 0; margin-bottom: 16px; }
+  .amount-prefix {
+    font-family: var(--font-display); font-size: 28px; color: var(--text2);
+    padding: 12px 0 12px 16px;
+    background: var(--bg); border: 1px solid var(--border2);
+    border-right: none; border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  }
+  .amount-input {
+    flex: 1; padding: 12px 16px;
+    background: var(--bg); border: 1px solid var(--border2);
+    border-left: none; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--text); font-family: var(--font-display);
+    font-size: 28px; outline: none;
+    -webkit-appearance: none;
+  }
+  .amount-input::placeholder { color: var(--text3); }
+
+  .note-input {
+    width: 100%; padding: 12px 16px; margin-bottom: 16px;
+    background: var(--bg); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-family: var(--font-body); font-size: 14px; outline: none;
+    -webkit-appearance: none;
+  }
+  .note-input::placeholder { color: var(--text3); }
+  .note-input:focus { border-color: var(--accent2); }
+
+  .recurring-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 14px 16px; margin-bottom: 20px; cursor: pointer;
+  }
+  .toggle-left { display: flex; flex-direction: column; gap: 2px; }
+  .toggle-label { font-size: 14px; font-weight: 500; color: var(--text); }
+  .toggle-sub { font-size: 11px; color: var(--text3); }
+  .toggle-switch {
+    width: 44px; height: 26px; border-radius: 13px;
+    background: var(--border2); position: relative; transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle-switch.on { background: var(--accent2); }
+  .toggle-switch::after {
+    content: ''; position: absolute;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: white; top: 3px; left: 3px;
+    transition: left 0.2s;
+  }
+  .toggle-switch.on::after { left: 21px; }
+
+  /* edit sheet actions */
+  .action-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;
+  }
+  .btn-secondary {
+    padding: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border2); background: transparent;
+    color: var(--text2); font-family: var(--font-body); font-size: 14px;
+    font-weight: 500; cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .btn-secondary:active { transform: scale(0.97); background: var(--surface2); }
+  .btn-danger {
+    padding: 12px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(224,112,112,0.3); background: rgba(224,112,112,0.08);
+    color: var(--danger); font-family: var(--font-body); font-size: 14px;
+    font-weight: 500; cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .btn-danger:active { transform: scale(0.97); }
+
+  /* ── MONTHLY VIEW ── */
+  .month-wrap { padding: 12px 20px; flex: 1; overflow-y: auto; padding-bottom: calc(var(--safe-bottom) + 90px); scrollbar-width: none; }
+  .month-wrap::-webkit-scrollbar { display: none; }
+
+  .month-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .month-nav-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text2); cursor: pointer; transition: all 0.15s;
+  }
+  .month-nav-btn:active { transform: scale(0.93); }
+  .month-title { font-family: var(--font-display); font-size: 20px; color: var(--text); }
+
+  .cat-summary-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 14px;
+    margin-bottom: 8px;
+  }
+  .cat-sum-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cat-sum-info { flex: 1; }
+  .cat-sum-name { font-size: 14px; font-weight: 500; color: var(--text); }
+  .cat-sum-days { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .cat-sum-bar { height: 3px; background: var(--border2); border-radius: 2px; margin-top: 8px; }
+  .cat-sum-bar-fill { height: 100%; border-radius: 2px; background: var(--accent2); transition: width 0.6s ease; }
+  .cat-sum-amt { font-size: 15px; font-weight: 600; color: var(--text); text-align: right; }
+
+  /* ── MANAGE SHEET ── */
+  .manage-section { margin-bottom: 24px; }
+  .manage-title {
+    font-size: 11px; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
+  }
+  .manage-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 12px 14px; margin-bottom: 6px;
+  }
+  .manage-item-info { flex: 1; }
+  .manage-item-name { font-size: 14px; font-weight: 500; color: var(--text); }
+  .manage-item-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .manage-item-actions { display: flex; gap: 6px; }
+  .mini-btn {
+    width: 28px; height: 28px; border-radius: 8px;
+    border: 1px solid var(--border2); background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text3); transition: all 0.15s;
+  }
+  .mini-btn.del { border-color: rgba(224,112,112,0.3); color: var(--danger); }
+  .mini-btn:active { transform: scale(0.93); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; top: calc(var(--safe-top) + 60px); left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); padding: 10px 18px; border-radius: 20px;
+    font-size: 13px; font-weight: 500; z-index: 999;
+    opacity: 0; transition: all 0.3s; white-space: nowrap;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── MONTH CATEGORY SHEET ── */
+  .month-detail-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .month-detail-item:last-child { border-bottom: none; }
+  .mdi-date { font-size: 11px; color: var(--text3); width: 32px; flex-shrink: 0; }
+  .mdi-note { flex: 1; font-size: 13px; color: var(--text2); }
+  .mdi-status { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .mdi-status.skipped { color: var(--danger); }
+  .mdi-amt { font-size: 14px; font-weight: 600; color: var(--text); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- AUTH SCREEN -->
+  <div class="screen active" id="auth-screen">
+    <div class="auth-bg"></div>
+    <div class="auth-card">
+      <div class="auth-logo">
+        <h1>Ledger</h1>
+        <p>Daily expense tracking, refined</p>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+        <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+      </div>
+      <div class="auth-error" id="auth-error"></div>
+      <div id="login-form">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="login-email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button class="btn-primary" id="login-btn" onclick="doLogin()">Sign In</button>
+      </div>
+      <div id="register-form" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input class="form-input" type="text" id="reg-name" placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="reg-email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="reg-password" placeholder="Min 6 characters" autocomplete="new-password">
+        </div>
+        <button class="btn-primary" id="register-btn" onclick="doRegister()">Create Account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN SCREEN -->
+  <div class="screen" id="main-screen">
+
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <h2 id="topbar-title">Today</h2>
+        <p id="topbar-date"></p>
+      </div>
+      <div class="topbar-right">
+        <div class="icon-btn" onclick="openManageSheet()" title="Manage">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+        </div>
+        <div class="icon-btn" onclick="doLogout()" title="Logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wake Banner -->
+    <div class="wake-banner" id="wake-banner">
+      <div class="wake-dot"></div>
+      <span id="wake-text">Waking up database…</span>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="summary-wrap">
+      <div class="summary-card">
+        <div class="summary-row">
+          <div>
+            <div class="summary-label" id="summary-label">Today's Spending</div>
+            <div class="summary-amount"><span>₹</span><span id="summary-amount">0</span></div>
+          </div>
+        </div>
+        <div class="summary-meta">
+          <div class="summary-stat">
+            <div class="summary-stat-label">Entries</div>
+            <div class="summary-stat-val" id="summary-entries">0</div>
+          </div>
+          <div class="summary-stat">
+            <div class="summary-stat-label">Recurring</div>
+            <div class="summary-stat-val" id="summary-recurring">0</div>
+          </div>
+          <div class="summary-stat">
+            <div class="summary-stat-label">Skipped</div>
+            <div class="summary-stat-val" id="summary-skipped">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View Toggle -->
+    <div class="view-toggle">
+      <button class="view-btn active" onclick="switchView('daily')">Daily</button>
+      <button class="view-btn" onclick="switchView('monthly')">Monthly</button>
+    </div>
+
+    <!-- DAILY VIEW -->
+    <div id="daily-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <!-- Recurring strip -->
+      <div class="recurring-strip" id="recurring-strip" style="display:none;">
+        <div class="recurring-strip-label">Recurring Today</div>
+        <div class="recurring-items" id="recurring-items-row"></div>
+      </div>
+      <!-- List -->
+      <div class="list-wrap" id="expense-list">
+        <!-- skeletons -->
+        <div class="skeleton"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div></div>
+        <div class="skeleton"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div></div>
+        <div class="skeleton"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line"></div><div class="skel-line short"></div></div></div>
+      </div>
+    </div>
+
+    <!-- MONTHLY VIEW -->
+    <div id="monthly-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div class="month-wrap">
+        <div class="month-nav">
+          <div class="month-nav-btn" onclick="changeMonth(-1)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </div>
+          <div class="month-title" id="month-title"></div>
+          <div class="month-nav-btn" onclick="changeMonth(1)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+        <div id="monthly-list"></div>
+      </div>
+    </div>
+
+    <!-- FAB -->
+    <button class="fab" id="fab" onclick="toggleAddSheet()">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+
+  </div><!-- /main-screen -->
+</div><!-- /app -->
+
+<!-- ── OVERLAYS ── -->
+<div class="sheet-overlay" id="overlay" onclick="closeAllSheets()"></div>
+
+<!-- ADD EXPENSE SHEET -->
+<div class="sheet" id="add-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title">Add Expense</div>
+    <button class="sheet-close" onclick="closeAllSheets()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body">
+    <div class="form-label" style="margin-bottom:10px">Category</div>
+    <div class="cat-grid" id="cat-grid"></div>
+    <div class="amount-row">
+      <div class="amount-prefix">₹</div>
+      <input class="amount-input" type="number" id="add-amount" placeholder="0" inputmode="decimal">
+    </div>
+    <input class="note-input" type="text" id="add-note" placeholder="Note (optional)">
+    <div class="recurring-toggle" onclick="toggleRecurring()">
+      <div class="toggle-left">
+        <div class="toggle-label">Recurring Daily</div>
+        <div class="toggle-sub">Auto-log every day</div>
+      </div>
+      <div class="toggle-switch" id="recurring-toggle-sw"></div>
+    </div>
+    <button class="btn-primary" onclick="submitExpense()">Save Expense</button>
+  </div>
+</div>
+
+<!-- EDIT EXPENSE SHEET -->
+<div class="sheet" id="edit-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title">Edit Entry</div>
+    <button class="sheet-close" onclick="closeAllSheets()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body">
+    <div class="form-group">
+      <label class="form-label">Amount</label>
+      <div class="amount-row" style="margin-bottom:0">
+        <div class="amount-prefix">₹</div>
+        <input class="amount-input" type="number" id="edit-amount" placeholder="0" inputmode="decimal">
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:16px">
+      <label class="form-label">Note</label>
+      <input class="note-input" type="text" id="edit-note" placeholder="Note (optional)" style="margin-bottom:0">
+    </div>
+    <div class="action-row" style="margin-top:20px">
+      <button class="btn-secondary" onclick="saveEdit()">Save Changes</button>
+      <button class="btn-danger" onclick="markSkipped()">Mark Skipped</button>
+    </div>
+    <button class="btn-danger" style="width:100%;margin-top:8px" onclick="deleteExpense()">Delete Entry</button>
+  </div>
+</div>
+
+<!-- MANAGE SHEET -->
+<div class="sheet" id="manage-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title">Manage</div>
+    <button class="sheet-close" onclick="closeAllSheets()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body">
+    <!-- Add category -->
+    <div class="manage-section">
+      <div class="manage-title">Add Custom Category</div>
+      <div class="cat-grid" id="icon-picker" style="margin-bottom:12px"></div>
+      <input class="form-input" type="text" id="new-cat-name" placeholder="Category name" style="margin-bottom:8px">
+      <button class="btn-primary" style="margin-top:0" onclick="addCategory()">Add Category</button>
+    </div>
+    <!-- Recurring rules -->
+    <div class="manage-section">
+      <div class="manage-title">Recurring Rules</div>
+      <div id="recurring-rules-list"></div>
+    </div>
+    <!-- Categories -->
+    <div class="manage-section">
+      <div class="manage-title">Your Categories</div>
+      <div id="categories-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MONTH DETAIL SHEET -->
+<div class="sheet" id="month-detail-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title" id="month-detail-title"></div>
+    <button class="sheet-close" onclick="closeAllSheets()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body" id="month-detail-body"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG — REPLACE THESE ──
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// ────────────────────────────
+
+const { createClient } = supabase;
+let sb;
+
+// ── ICONS (SVG paths keyed by name) ──
+const ICONS = {
+  milk: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l1 6H7L8 2z"/><path d="M7 8v13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>`,
+  newspaper: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16"/><path d="M8 4v5"/><path d="M7 13h5"/><path d="M7 17h5"/><path d="M15 13h2v4h-2z"/></svg>`,
+  vegetables: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c0 0-8-4-8-12 0-4 3-7 8-7s8 3 8 7c0 8-8 12-8 12z"/><path d="M12 3v19"/></svg>`,
+  transport: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="12" rx="2"/><path d="M16 21v-2"/><path d="M8 21v-2"/><path d="M2 12h20"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg>`,
+  electricity: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  grocery: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
+  medicine: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H20a2 2 0 0 1 2 2v3"/><circle cx="18" cy="18" r="4"/><path d="M18 16v4"/><path d="M16 18h4"/></svg>`,
+  water: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6 10 4 14 4 17a8 8 0 0 0 16 0c0-3-2-7-8-15z"/></svg>`,
+  food: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`,
+  other: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>`,
+  home: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  internet: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+};
+
+const CAT_COLORS = ['#c4a96d','#70a4c4','#70c490','#c47090','#a470c4','#c4a070','#70c4b4','#c47070'];
+const DEFAULT_CATS = [
+  {name:'Milk', icon_key:'milk', color:'#c4a96d'},
+  {name:'Newspaper', icon_key:'newspaper', color:'#70a4c4'},
+  {name:'Vegetables', icon_key:'vegetables', color:'#70c490'},
+  {name:'Transport', icon_key:'transport', color:'#c47090'},
+  {name:'Electricity', icon_key:'electricity', color:'#e0b070'},
+  {name:'Grocery', icon_key:'grocery', color:'#a470c4'},
+  {name:'Medicine', icon_key:'medicine', color:'#70c4b4'},
+  {name:'Food', icon_key:'food', color:'#c47070'},
+];
+
+// ── STATE ──
+let currentUser = null;
+let categories = [];
+let expenses = [];
+let recurringRules = [];
+let selectedCatId = null;
+let isRecurring = false;
+let editingExpense = null;
+let currentView = 'daily';
+let currentMonth = new Date();
+let selectedIconKey = 'other';
+let localCache = { expenses: [], categories: [], rules: [] };
+let retryCount = 0;
+
+// ── INIT ──
+async function init() {
+  sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  setDate();
+  loadCache();
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    showMain();
+  } else {
+    showScreen('auth-screen');
+  }
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      showMain();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      showScreen('auth-screen');
+    }
+  });
+}
+
+function setDate() {
+  const now = new Date();
+  document.getElementById('topbar-date').textContent =
+    now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function loadCache() {
+  try {
+    const c = localStorage.getItem('ledger_cache');
+    if (c) localCache = JSON.parse(c);
+  } catch(e) {}
+}
+function saveCache() {
+  try { localStorage.setItem('ledger_cache', JSON.stringify(localCache)); } catch(e) {}
+}
+
+// ── SCREEN MANAGEMENT ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+async function showMain() {
+  showScreen('main-screen');
+  await loadData();
+}
+
+// ── AUTH ──
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => {
+    t.classList.toggle('active', (i===0 && tab==='login') || (i===1 && tab==='register'));
+  });
+  document.getElementById('login-form').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('auth-error').classList.remove('show');
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-password').value;
+  if (!email || !pass) return showAuthError('Please fill in all fields');
+  setBtnLoading('login-btn', true);
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  setBtnLoading('login-btn', false);
+  if (error) showAuthError(error.message);
+}
+
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-password').value;
+  if (!name || !email || !pass) return showAuthError('Please fill in all fields');
+  if (pass.length < 6) return showAuthError('Password must be at least 6 characters');
+  setBtnLoading('register-btn', true);
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name } } });
+  setBtnLoading('register-btn', false);
+  if (error) { showAuthError(error.message); return; }
+  showAuthError('Account created! Signing you in…');
+  document.getElementById('auth-error').style.color = 'var(--success)';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.classList.add('show');
+}
+function setBtnLoading(id, loading) {
+  const btn = document.getElementById(id);
+  btn.disabled = loading;
+  btn.textContent = loading ? 'Please wait…' : (id === 'login-btn' ? 'Sign In' : 'Create Account');
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  localStorage.removeItem('ledger_cache');
+  expenses = []; categories = []; recurringRules = [];
+}
+
+// ── DATA LOADING with wake-up logic ──
+async function loadData(retry = 0) {
+  try {
+    if (retry > 0) {
+      document.getElementById('wake-banner').classList.add('show');
+      document.getElementById('wake-text').textContent =
+        retry === 1 ? 'Waking up database…' : `Retrying… (${retry}/5)`;
+    }
+
+    // Load from cache first for instant render
+    if (localCache.categories.length) {
+      categories = localCache.categories;
+      recurringRules = localCache.rules;
+      expenses = localCache.expenses;
+      renderAll();
+    }
+
+    const uid = currentUser.id;
+    const [catRes, rulesRes] = await Promise.all([
+      sb.from('categories').select('*').eq('user_id', uid).order('created_at'),
+      sb.from('recurring_rules').select('*').eq('user_id', uid).eq('is_active', true),
+    ]);
+
+    if (catRes.error) throw catRes.error;
+
+    categories = catRes.data;
+    recurringRules = rulesRes.data || [];
+
+    // Seed default categories if first time
+    if (categories.length === 0) {
+      await seedDefaultCategories();
+      const r2 = await sb.from('categories').select('*').eq('user_id', uid).order('created_at');
+      categories = r2.data || [];
+    }
+
+    // Load expenses (last 90 days)
+    const since = new Date(); since.setDate(since.getDate() - 90);
+    const expRes = await sb.from('expenses').select('*')
+      .eq('user_id', uid)
+      .gte('date', since.toISOString().split('T')[0])
+      .order('date', { ascending: false });
+
+    expenses = expRes.data || [];
+
+    // Auto-log recurring for today
+    await autoLogRecurring();
+
+    localCache = { categories, rules: recurringRules, expenses };
+    saveCache();
+    retryCount = 0;
+    document.getElementById('wake-banner').classList.remove('show');
+    renderAll();
+
+  } catch (err) {
+    console.error('Load error:', err);
+    if (retry < 5) {
+      const delay = Math.pow(2, retry) * 1500;
+      setTimeout(() => loadData(retry + 1), delay);
+    } else {
+      document.getElementById('wake-text').textContent = 'Using cached data (offline)';
+      renderAll();
+    }
+  }
+}
+
+async function seedDefaultCategories() {
+  const uid = currentUser.id;
+  for (const cat of DEFAULT_CATS) {
+    await sb.from('categories').insert({ ...cat, user_id: uid });
+  }
+}
+
+// ── AUTO-LOG RECURRING ──
+async function autoLogRecurring() {
+  if (!recurringRules.length) return;
+  const uid = currentUser.id;
+  const today = todayStr();
+
+  // Get dates that need catch-up (up to 7 days back)
+  const dates = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+
+  for (const rule of recurringRules) {
+    for (const date of dates) {
+      const already = expenses.find(e =>
+        e.recurring_rule_id === rule.id && e.date === date
+      );
+      if (!already) {
+        const { data } = await sb.from('expenses').insert({
+          user_id: uid,
+          category_id: rule.category_id,
+          amount: rule.amount,
+          note: '',
+          date,
+          source: 'auto',
+          status: 'confirmed',
+          recurring_rule_id: rule.id,
+        }).select().single();
+        if (data) expenses.push(data);
+      }
+    }
+  }
+  expenses.sort((a,b) => b.date.localeCompare(a.date));
+}
+
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+// ── RENDER ALL ──
+function renderAll() {
+  renderRecurringStrip();
+  renderExpenseList();
+  renderSummary();
+  updateCatGrid();
+  if (currentView === 'monthly') renderMonthly();
+}
+
+// ── SUMMARY ──
+function renderSummary() {
+  const today = todayStr();
+  const todayExp = expenses.filter(e => e.date === today);
+  const total = todayExp.filter(e => e.status !== 'skipped').reduce((s,e) => s + e.amount, 0);
+  const recurCount = todayExp.filter(e => e.source === 'auto').length;
+  const skipped = todayExp.filter(e => e.status === 'skipped').length;
+
+  document.getElementById('summary-amount').textContent = total.toLocaleString('en-IN');
+  document.getElementById('summary-entries').textContent = todayExp.length;
+  document.getElementById('summary-recurring').textContent = recurCount;
+  document.getElementById('summary-skipped').textContent = skipped;
+}
+
+// ── RECURRING STRIP ──
+function renderRecurringStrip() {
+  if (!recurringRules.length) {
+    document.getElementById('recurring-strip').style.display = 'none';
+    return;
+  }
+  document.getElementById('recurring-strip').style.display = 'block';
+  const today = todayStr();
+  const row = document.getElementById('recurring-items-row');
+  row.innerHTML = '';
+
+  for (const rule of recurringRules) {
+    const cat = categories.find(c => c.id === rule.category_id);
+    if (!cat) continue;
+    const exp = expenses.find(e => e.recurring_rule_id === rule.id && e.date === today);
+    const isSkipped = exp?.status === 'skipped';
+
+    const chip = document.createElement('div');
+    chip.className = `recur-chip ${exp ? (isSkipped ? 'skipped' : 'pending') : 'pending'}`;
+    chip.innerHTML = `
+      <div class="recur-dot ${isSkipped ? 'skipped' : ''}"></div>
+      <div class="recur-chip-name">${cat.name}</div>
+      <div class="recur-chip-amt">₹${rule.amount}</div>
+    `;
+    if (exp) chip.onclick = () => openEditSheet(exp);
+    row.appendChild(chip);
+  }
+}
+
+// ── EXPENSE LIST ──
+function renderExpenseList() {
+  const list = document.getElementById('expense-list');
+  const today = todayStr();
+  const todayExp = expenses.filter(e => e.date === today);
+
+  list.innerHTML = '';
+  if (!todayExp.length) {
+    list.innerHTML = `<div class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <p>No expenses today. Tap + to add one.</p>
+    </div>`;
+    return;
+  }
+
+  todayExp.forEach(exp => {
+    const cat = categories.find(c => c.id === exp.category_id);
+    list.appendChild(buildExpenseItem(exp, cat));
+  });
+}
+
+function buildExpenseItem(exp, cat) {
+  const el = document.createElement('div');
+  el.className = `expense-item ${exp.status === 'skipped' ? 'skipped' : ''} ${exp.source === 'auto' ? 'auto' : ''}`;
+
+  const color = cat?.color || '#888';
+  const icon = ICONS[cat?.icon_key] || ICONS.other;
+  const statusLabel = exp.status === 'skipped' ? 'skipped' : exp.source === 'auto' ? (exp.status === 'edited' ? 'edited' : 'auto') : '';
+
+  el.innerHTML = `
+    <div class="item-icon" style="background:${color}18">${icon.replace('stroke="currentColor"', `stroke="${color}"`)}</div>
+    <div class="item-info">
+      <div class="item-name">${cat?.name || 'Unknown'}</div>
+      <div class="item-meta">${exp.note || (exp.source === 'auto' ? 'Auto-logged' : 'Manual')}</div>
+    </div>
+    <div class="item-right">
+      <div class="item-amount">${exp.status === 'skipped' ? '—' : '₹' + exp.amount.toLocaleString('en-IN')}</div>
+      ${statusLabel ? `<div class="item-status ${exp.status === 'skipped' ? 'skipped' : exp.status === 'edited' ? 'edited' : 'auto'}">${statusLabel}</div>` : ''}
+    </div>
+  `;
+  el.onclick = () => openEditSheet(exp);
+  return el;
+}
+
+// ── MONTHLY VIEW ──
+function renderMonthly() {
+  const title = currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  document.getElementById('month-title').textContent = title;
+
+  const y = currentMonth.getFullYear(), m = currentMonth.getMonth();
+  const monthExp = expenses.filter(e => {
+    const d = new Date(e.date);
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+
+  const totals = {};
+  for (const exp of monthExp) {
+    if (exp.status === 'skipped') continue;
+    totals[exp.category_id] = (totals[exp.category_id] || 0) + exp.amount;
+  }
+
+  const maxVal = Math.max(...Object.values(totals), 1);
+  const list = document.getElementById('monthly-list');
+  list.innerHTML = '';
+
+  if (!monthExp.length) {
+    list.innerHTML = `<div class="empty-state"><p>No expenses this month.</p></div>`;
+    return;
+  }
+
+  const sorted = Object.entries(totals).sort((a,b) => b[1]-a[1]);
+  for (const [catId, total] of sorted) {
+    const cat = categories.find(c => c.id === catId);
+    if (!cat) continue;
+    const color = cat.color || '#888';
+    const icon = ICONS[cat.icon_key] || ICONS.other;
+    const days = monthExp.filter(e => e.category_id === catId && e.status !== 'skipped').length;
+    const skipped = monthExp.filter(e => e.category_id === catId && e.status === 'skipped').length;
+    const pct = Math.round((total / maxVal) * 100);
+
+    const el = document.createElement('div');
+    el.className = 'cat-summary-item';
+    el.innerHTML = `
+      <div class="cat-sum-icon" style="background:${color}18">${icon.replace('stroke="currentColor"', `stroke="${color}"`)}</div>
+      <div class="cat-sum-info">
+        <div class="cat-sum-name">${cat.name}</div>
+        <div class="cat-sum-days">${days} entries${skipped ? ` · ${skipped} skipped` : ''}</div>
+        <div class="cat-sum-bar"><div class="cat-sum-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      </div>
+      <div class="cat-sum-amt">₹${total.toLocaleString('en-IN')}</div>
+    `;
+    el.onclick = () => openMonthDetail(cat, catId, y, m);
+    list.appendChild(el);
+  }
+
+  // Update summary for monthly
+  const monthTotal = Object.values(totals).reduce((s,v) => s+v, 0);
+  document.getElementById('summary-label').textContent = 'Month Spending';
+  document.getElementById('summary-amount').textContent = monthTotal.toLocaleString('en-IN');
+}
+
+function changeMonth(dir) {
+  currentMonth.setMonth(currentMonth.getMonth() + dir);
+  renderMonthly();
+}
+
+function openMonthDetail(cat, catId, year, month) {
+  const monthExp = expenses.filter(e => {
+    const d = new Date(e.date);
+    return d.getFullYear() === year && d.getMonth() === month && e.category_id === catId;
+  }).sort((a,b) => a.date.localeCompare(b.date));
+
+  document.getElementById('month-detail-title').textContent = cat.name;
+  const body = document.getElementById('month-detail-body');
+  body.innerHTML = '';
+
+  if (!monthExp.length) { body.innerHTML = '<p style="color:var(--text3)">No entries</p>'; }
+  else {
+    monthExp.forEach(exp => {
+      const d = new Date(exp.date);
+      const dateStr = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      const el = document.createElement('div');
+      el.className = 'month-detail-item';
+      el.innerHTML = `
+        <div class="mdi-date">${dateStr}</div>
+        <div class="mdi-note">${exp.note || (exp.source === 'auto' ? 'Auto' : 'Manual')}</div>
+        ${exp.status === 'skipped' ? '<div class="mdi-status skipped">Skipped</div>' : `<div class="mdi-amt">₹${exp.amount.toLocaleString('en-IN')}</div>`}
+      `;
+      body.appendChild(el);
+    });
+  }
+  openSheet('month-detail-sheet');
+}
+
+// ── VIEW SWITCH ──
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.view-btn').forEach((b,i) => {
+    b.classList.toggle('active', (i===0 && view==='daily') || (i===1 && view==='monthly'));
+  });
+  document.getElementById('daily-view').style.display = view === 'daily' ? 'flex' : 'none';
+  document.getElementById('monthly-view').style.display = view === 'monthly' ? 'flex' : 'none';
+
+  if (view === 'monthly') {
+    document.getElementById('topbar-title').textContent = 'Monthly';
+    currentMonth = new Date();
+    renderMonthly();
+  } else {
+    document.getElementById('topbar-title').textContent = 'Today';
+    renderSummary();
+  }
+}
+
+// ── ADD EXPENSE ──
+function updateCatGrid() {
+  const grid = document.getElementById('cat-grid');
+  grid.innerHTML = '';
+  for (const cat of categories) {
+    const color = cat.color || '#888';
+    const icon = ICONS[cat.icon_key] || ICONS.other;
+    const btn = document.createElement('div');
+    btn.className = `cat-btn ${selectedCatId === cat.id ? 'selected' : ''}`;
+    btn.innerHTML = `
+      <div style="color:${color}">${icon}</div>
+      <div class="cat-btn-label">${cat.name}</div>
+    `;
+    btn.onclick = () => { selectedCatId = cat.id; updateCatGrid(); };
+    grid.appendChild(btn);
+  }
+}
+
+function toggleRecurring() {
+  isRecurring = !isRecurring;
+  document.getElementById('recurring-toggle-sw').classList.toggle('on', isRecurring);
+}
+
+function toggleAddSheet() {
+  const sheet = document.getElementById('add-sheet');
+  if (sheet.classList.contains('open')) {
+    closeAllSheets();
+  } else {
+    selectedCatId = categories[0]?.id || null;
+    isRecurring = false;
+    document.getElementById('add-amount').value = '';
+    document.getElementById('add-note').value = '';
+    document.getElementById('recurring-toggle-sw').classList.remove('on');
+    updateCatGrid();
+    openSheet('add-sheet');
+  }
+  document.getElementById('fab').classList.toggle('open', sheet.classList.contains('open'));
+}
+
+async function submitExpense() {
+  const amount = parseFloat(document.getElementById('add-amount').value);
+  const note = document.getElementById('add-note').value.trim();
+  if (!selectedCatId) return showToast('Pick a category first');
+  if (!amount || amount <= 0) return showToast('Enter a valid amount');
+
+  const uid = currentUser.id;
+  let ruleId = null;
+
+  if (isRecurring) {
+    const { data: rule } = await sb.from('recurring_rules').insert({
+      user_id: uid, category_id: selectedCatId, amount, frequency: 'daily'
+    }).select().single();
+    if (rule) { recurringRules.push(rule); ruleId = rule.id; }
+  }
+
+  const expData = {
+    user_id: uid, category_id: selectedCatId, amount,
+    note, date: todayStr(), source: 'manual', status: 'confirmed',
+    recurring_rule_id: ruleId
+  };
+
+  // Optimistic
+  const tempId = 'temp_' + Date.now();
+  expenses.unshift({ ...expData, id: tempId });
+  renderAll(); closeAllSheets(); showToast('Expense saved');
+
+  const { data, error } = await sb.from('expenses').insert(expData).select().single();
+  const idx = expenses.findIndex(e => e.id === tempId);
+  if (data && idx >= 0) expenses[idx] = data;
+  if (error) { expenses.splice(idx, 1); renderAll(); showToast('Failed to save'); }
+  localCache.expenses = expenses; saveCache();
+}
+
+// ── EDIT EXPENSE ──
+function openEditSheet(exp) {
+  editingExpense = exp;
+  document.getElementById('edit-amount').value = exp.amount;
+  document.getElementById('edit-note').value = exp.note || '';
+  openSheet('edit-sheet');
+}
+
+async function saveEdit() {
+  if (!editingExpense) return;
+  const amount = parseFloat(document.getElementById('edit-amount').value);
+  const note = document.getElementById('edit-note').value.trim();
+  if (!amount || amount <= 0) return showToast('Enter a valid amount');
+
+  const updates = { amount, note, status: editingExpense.source === 'auto' ? 'edited' : 'confirmed' };
+  const { error } = await sb.from('expenses').update(updates).eq('id', editingExpense.id);
+  if (!error) {
+    const idx = expenses.findIndex(e => e.id === editingExpense.id);
+    if (idx >= 0) expenses[idx] = { ...expenses[idx], ...updates };
+    renderAll(); closeAllSheets(); showToast('Updated');
+    localCache.expenses = expenses; saveCache();
+  } else showToast('Update failed');
+}
+
+async function markSkipped() {
+  if (!editingExpense) return;
+  const { error } = await sb.from('expenses').update({ status: 'skipped' }).eq('id', editingExpense.id);
+  if (!error) {
+    const idx = expenses.findIndex(e => e.id === editingExpense.id);
+    if (idx >= 0) expenses[idx].status = 'skipped';
+    renderAll(); closeAllSheets(); showToast('Marked as skipped');
+    localCache.expenses = expenses; saveCache();
+  }
+}
+
+async function deleteExpense() {
+  if (!editingExpense) return;
+  const { error } = await sb.from('expenses').delete().eq('id', editingExpense.id);
+  if (!error) {
+    expenses = expenses.filter(e => e.id !== editingExpense.id);
+    renderAll(); closeAllSheets(); showToast('Deleted');
+    localCache.expenses = expenses; saveCache();
+  }
+}
+
+// ── MANAGE SHEET ──
+function openManageSheet() {
+  renderIconPicker();
+  renderManageLists();
+  openSheet('manage-sheet');
+}
+
+function renderIconPicker() {
+  const grid = document.getElementById('icon-picker');
+  grid.innerHTML = '';
+  for (const [key, svg] of Object.entries(ICONS)) {
+    const btn = document.createElement('div');
+    btn.className = `cat-btn ${selectedIconKey === key ? 'selected' : ''}`;
+    btn.innerHTML = `<div style="color:var(--text2)">${svg}</div><div class="cat-btn-label">${key}</div>`;
+    btn.onclick = () => { selectedIconKey = key; renderIconPicker(); };
+    grid.appendChild(btn);
+  }
+}
+
+function renderManageLists() {
+  const catList = document.getElementById('categories-list');
+  catList.innerHTML = '';
+  categories.forEach(cat => {
+    const color = cat.color || '#888';
+    const icon = ICONS[cat.icon_key] || ICONS.other;
+    const el = document.createElement('div');
+    el.className = 'manage-item';
+    el.innerHTML = `
+      <div style="color:${color};width:28px;flex-shrink:0">${icon}</div>
+      <div class="manage-item-info"><div class="manage-item-name">${cat.name}</div></div>
+      <div class="manage-item-actions">
+        <button class="mini-btn del" onclick="deleteCategory('${cat.id}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    `;
+    catList.appendChild(el);
+  });
+
+  const ruleList = document.getElementById('recurring-rules-list');
+  ruleList.innerHTML = '';
+  if (!recurringRules.length) {
+    ruleList.innerHTML = '<div style="color:var(--text3);font-size:13px">No recurring rules set.</div>';
+    return;
+  }
+  recurringRules.forEach(rule => {
+    const cat = categories.find(c => c.id === rule.category_id);
+    const el = document.createElement('div');
+    el.className = 'manage-item';
+    el.innerHTML = `
+      <div class="manage-item-info">
+        <div class="manage-item-name">${cat?.name || 'Unknown'}</div>
+        <div class="manage-item-sub">₹${rule.amount} · Daily</div>
+      </div>
+      <div class="manage-item-actions">
+        <button class="mini-btn del" onclick="deleteRule('${rule.id}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    `;
+    ruleList.appendChild(el);
+  });
+}
+
+async function addCategory() {
+  const name = document.getElementById('new-cat-name').value.trim();
+  if (!name) return showToast('Enter a category name');
+  const color = CAT_COLORS[categories.length % CAT_COLORS.length];
+  const { data, error } = await sb.from('categories').insert({
+    user_id: currentUser.id, name, icon_key: selectedIconKey, color
+  }).select().single();
+  if (!error && data) {
+    categories.push(data);
+    document.getElementById('new-cat-name').value = '';
+    renderManageLists();
+    updateCatGrid();
+    localCache.categories = categories; saveCache();
+    showToast('Category added');
+  }
+}
+
+async function deleteCategory(id) {
+  const { error } = await sb.from('categories').delete().eq('id', id);
+  if (!error) {
+    categories = categories.filter(c => c.id !== id);
+    expenses = expenses.filter(e => e.category_id !== id);
+    renderManageLists(); renderAll();
+    localCache.categories = categories; saveCache();
+    showToast('Category deleted');
+  }
+}
+
+async function deleteRule(id) {
+  const { error } = await sb.from('recurring_rules').update({ is_active: false }).eq('id', id);
+  if (!error) {
+    recurringRules = recurringRules.filter(r => r.id !== id);
+    renderManageLists(); renderRecurringStrip();
+    localCache.rules = recurringRules; saveCache();
+    showToast('Recurring rule removed');
+  }
+}
+
+// ── SHEET MANAGEMENT ──
+function openSheet(id) {
+  closeAllSheets(false);
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById(id).classList.add('open');
+}
+function closeAllSheets(closeFab = true) {
+  document.getElementById('overlay').classList.remove('open');
+  document.querySelectorAll('.sheet').forEach(s => s.classList.remove('open'));
+  if (closeFab) document.getElementById('fab').classList.remove('open');
+  editingExpense = null;
+}
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── START ──
+init();
+</script>
+</body>
+</html>
