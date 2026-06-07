@@ -422,19 +422,20 @@
   .cat-btn:active { transform: scale(0.96); }
   .cat-btn-label { font-size: 10px; font-weight: 500; color: var(--text2); text-align: center; line-height: 1.2; }
 
-  .amount-row { display: flex; align-items: center; gap: 0; margin-bottom: 16px; }
+  .amount-row { display: flex; align-items: center; gap: 0; margin-bottom: 16px; max-width: 220px; }
   .amount-prefix {
-    font-family: var(--font-display); font-size: 28px; color: var(--text2);
-    padding: 12px 0 12px 16px;
+    font-family: var(--font-display); font-size: 20px; color: var(--text2);
+    padding: 10px 0 10px 14px;
     background: var(--bg); border: 1px solid var(--border2);
     border-right: none; border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    flex-shrink: 0;
   }
   .amount-input {
-    flex: 1; padding: 12px 16px;
+    width: 140px; min-width: 0; padding: 10px 14px;
     background: var(--bg); border: 1px solid var(--border2);
     border-left: none; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     color: var(--text); font-family: var(--font-display);
-    font-size: 28px; outline: none;
+    font-size: 20px; outline: none;
     -webkit-appearance: none;
   }
   .amount-input::placeholder { color: var(--text3); }
