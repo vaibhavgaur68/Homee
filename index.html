@@ -5,7 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Homee">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f0f0f">
+<meta name="description" content="Daily expense tracking, refined">
 <title>Homee — Daily Expenses</title>
+
+<!-- PWA manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- Apple touch icons -->
+<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- Favicon -->
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -529,6 +545,58 @@
   .mini-btn.del { border-color: rgba(224,112,112,0.3); color: var(--danger); }
   .mini-btn:active { transform: scale(0.93); }
 
+  /* ── PWA INSTALL BANNER ── */
+  .install-banner {
+    position: fixed; bottom: calc(var(--safe-bottom) + 90px); left: 16px; right: 16px;
+    background: var(--surface); border: 1px solid rgba(232,213,163,0.25);
+    border-radius: var(--radius); padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    z-index: 500; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    transform: translateY(20px); opacity: 0;
+    transition: all 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+    pointer-events: none;
+  }
+  .install-banner.show { transform: translateY(0); opacity: 1; pointer-events: all; }
+  .install-banner-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--accent-dim); border: 1px solid rgba(232,213,163,0.2);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; color: var(--accent);
+  }
+  .install-banner-text { flex: 1; }
+  .install-banner-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .install-banner-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .install-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .install-btn {
+    padding: 8px 14px; border-radius: 8px;
+    font-family: var(--font-body); font-size: 12px; font-weight: 600;
+    cursor: pointer; border: none; transition: all 0.15s;
+  }
+  .install-btn.primary { background: var(--accent); color: #1a1000; }
+  .install-btn.secondary { background: var(--surface2); color: var(--text3); }
+  .install-btn:active { transform: scale(0.96); }
+
+  /* ── NOTIFICATION PERMISSION PROMPT ── */
+  .notif-prompt {
+    margin: 12px 20px 0;
+    background: rgba(112,196,144,0.08); border: 1px solid rgba(112,196,144,0.25);
+    border-radius: var(--radius-sm); padding: 12px 14px;
+    display: none; align-items: center; gap: 10px; flex-shrink: 0;
+  }
+  .notif-prompt.show { display: flex; }
+  .notif-prompt-text { flex: 1; font-size: 12px; color: var(--text2); line-height: 1.4; }
+  .notif-prompt-title { font-weight: 600; color: var(--success); font-size: 12px; }
+  .notif-prompt-btn {
+    padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    background: var(--success); color: #0a2010; border: none;
+    cursor: pointer; white-space: nowrap; font-family: var(--font-body);
+  }
+  .notif-prompt-dismiss {
+    padding: 6px; border-radius: 6px; font-size: 11px;
+    background: transparent; color: var(--text3); border: none;
+    cursor: pointer; font-family: var(--font-body);
+  }
+
   /* ── TOAST ── */
   .toast {
     position: fixed; top: calc(var(--safe-top) + 60px); left: 50%;
@@ -623,6 +691,17 @@
       <div class="wake-dot"></div>
       <span id="wake-text">Waking up database…</span>
     </div>
+
+
+<!-- NOTIFICATION PROMPT -->
+<div class="notif-prompt" id="notif-prompt">
+  <div class="notif-prompt-text">
+    <div class="notif-prompt-title">Enable Daily Reminders</div>
+    Get a nudge every evening to log your expenses
+  </div>
+  <button class="notif-prompt-btn" onclick="requestNotifPermission()">Enable</button>
+  <button class="notif-prompt-dismiss" onclick="dismissNotifPrompt()">No thanks</button>
+</div>
 
     <!-- Summary Card -->
     <div class="summary-wrap">
@@ -801,6 +880,21 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- PWA INSTALL BANNER -->
+<div class="install-banner" id="install-banner">
+  <div class="install-banner-icon">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+  </div>
+  <div class="install-banner-text">
+    <div class="install-banner-title">Add Homee to Home Screen</div>
+    <div class="install-banner-sub">Works offline · Daily reminders</div>
+  </div>
+  <div class="install-banner-actions">
+    <button class="install-btn secondary" onclick="dismissInstall()">Later</button>
+    <button class="install-btn primary" onclick="triggerInstall()">Install</button>
+  </div>
+</div>
+
 <script>
 // ── CONFIG — REPLACE THESE ──
 const SUPABASE_URL = 'https://ampuizkdsutqczwwuzvp.supabase.co';
@@ -902,6 +996,7 @@ function showScreen(id) {
 async function showMain() {
   showScreen('main-screen');
   await loadData();
+  setTimeout(maybeShowNotifPrompt, 5000);
 }
 
 // ── AUTH ──
@@ -1520,6 +1615,238 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
+
+
+// ════════════════════════════════════════════════════════
+//  PWA LAYER — Service Worker · Install · Notifications
+// ════════════════════════════════════════════════════════
+
+// ── SERVICE WORKER REGISTRATION ─────────────────────────
+let swRegistration = null;
+
+async function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    console.log('[Homee] SW registered:', swRegistration.scope);
+
+    // Listen for updates
+    swRegistration.addEventListener('updatefound', () => {
+      const newWorker = swRegistration.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          showToast('App updated! Refresh for latest version.');
+        }
+      });
+    });
+
+    // Handle messages from SW
+    navigator.serviceWorker.addEventListener('message', event => {
+      if (event.data?.action === 'notification-click') {
+        const url = event.data.url || '/';
+        if (url.includes('action=add')) {
+          toggleAddSheet && toggleAddSheet();
+        }
+      }
+      if (event.data?.action === 'sync-expenses') {
+        // Retry any pending syncs when online
+        if (navigator.onLine && currentUser) loadData();
+      }
+    });
+
+  } catch (err) {
+    console.warn('[Homee] SW registration failed:', err);
+  }
+}
+
+// ── PWA INSTALL PROMPT ───────────────────────────────────
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+
+  // Don't show if already dismissed in this session or in the past 7 days
+  const dismissed = localStorage.getItem('homee_install_dismissed');
+  if (dismissed && (Date.now() - parseInt(dismissed)) < 7 * 24 * 60 * 60 * 1000) return;
+
+  // Show after 3 seconds
+  setTimeout(() => {
+    document.getElementById('install-banner')?.classList.add('show');
+  }, 3000);
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  document.getElementById('install-banner')?.classList.remove('show');
+  showToast('Homee installed successfully!');
+  localStorage.setItem('homee_installed', '1');
+  // Auto-request notifications after install
+  setTimeout(maybeShowNotifPrompt, 2000);
+});
+
+function triggerInstall() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.then(result => {
+    deferredInstallPrompt = null;
+    document.getElementById('install-banner')?.classList.remove('show');
+    if (result.outcome === 'accepted') {
+      showToast('Installing Homee...');
+    }
+  });
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner')?.classList.remove('show');
+  localStorage.setItem('homee_install_dismissed', Date.now().toString());
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────────
+const NOTIF_PREF_KEY = 'homee_notif_pref';
+const REMINDER_HOUR = 20; // 8 PM daily reminder
+const REMINDER_MINUTE = 0;
+
+function maybeShowNotifPrompt() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    scheduleLocalReminder();
+    return;
+  }
+  if (Notification.permission === 'denied') return;
+  const dismissed = localStorage.getItem('homee_notif_dismissed');
+  if (dismissed) return;
+
+  // Show prompt after login only once
+  document.getElementById('notif-prompt')?.classList.add('show');
+}
+
+async function requestNotifPermission() {
+  document.getElementById('notif-prompt')?.classList.remove('show');
+  if (!('Notification' in window)) {
+    showToast('Notifications not supported on this browser');
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  if (permission === 'granted') {
+    showToast('Reminders enabled!');
+    localStorage.setItem(NOTIF_PREF_KEY, 'granted');
+    scheduleLocalReminder();
+  } else {
+    showToast('Reminders blocked. Enable in browser settings.');
+  }
+}
+
+function dismissNotifPrompt() {
+  document.getElementById('notif-prompt')?.classList.remove('show');
+  localStorage.setItem('homee_notif_dismissed', '1');
+}
+
+// ── LOCAL REMINDER SCHEDULER ──────────────────────────────
+// Uses localStorage timestamps to fire a notification once per day
+function scheduleLocalReminder() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  // Clear existing timer
+  const existingTimer = window._homeeReminderTimer;
+  if (existingTimer) clearTimeout(existingTimer);
+
+  const now = new Date();
+  let next = new Date();
+  next.setHours(REMINDER_HOUR, REMINDER_MINUTE, 0, 0);
+
+  // If 8 PM has passed today, schedule for tomorrow
+  if (next <= now) next.setDate(next.getDate() + 1);
+
+  const delay = next.getTime() - now.getTime();
+  console.log('[Homee] Next reminder in', Math.round(delay / 60000), 'minutes');
+
+  window._homeeReminderTimer = setTimeout(() => {
+    fireReminderNotification();
+    // Reschedule for next day
+    scheduleLocalReminder();
+  }, delay);
+}
+
+function fireReminderNotification() {
+  const today = new Date().toISOString().split('T')[0];
+  const lastFired = localStorage.getItem('homee_last_reminder');
+
+  // Don't double-fire on same day
+  if (lastFired === today) return;
+  localStorage.setItem('homee_last_reminder', today);
+
+  // Check if expenses already logged today
+  const todayExpenses = expenses.filter(e => e.date === today && e.status !== 'skipped');
+  const totalToday = todayExpenses.reduce((s, e) => s + e.amount, 0);
+
+  let body, icon;
+  if (todayExpenses.length === 0) {
+    body = "You haven't logged any expenses today. Tap to add one!";
+  } else {
+    body = "Today so far: \u20B9" + totalToday.toLocaleString('en-IN') + " across " + todayExpenses.length + " entries. All logged?";
+  }
+
+  if ('serviceWorker' in navigator && swRegistration) {
+    swRegistration.showNotification('Homee Daily Check-in', {
+      body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-72.png',
+      tag: 'homee-daily',
+      renotify: false,
+      vibrate: [200, 100, 200],
+      data: { url: '/index.html' },
+      actions: [
+        { action: 'add', title: '+ Add Expense' },
+        { action: 'dismiss', title: 'Done' }
+      ]
+    });
+  } else {
+    // Fallback: direct Notification API (no actions support)
+    new Notification('Homee Daily Check-in', {
+      body,
+      icon: '/icons/icon-192.png',
+      tag: 'homee-daily'
+    });
+  }
+}
+
+// ── ONLINE/OFFLINE HANDLING ───────────────────────────────
+window.addEventListener('online', () => {
+  showToast('Back online — syncing...');
+  if (currentUser) loadData();
+});
+
+window.addEventListener('offline', () => {
+  showToast('You are offline — using cached data');
+});
+
+// ── HANDLE ?action=add SHORTCUT ──────────────────────────
+function handleURLAction() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('action') === 'add') {
+    // Open add sheet once user is logged in and main is visible
+    const checkReady = setInterval(() => {
+      if (currentUser && document.getElementById('main-screen')?.classList.contains('active')) {
+        clearInterval(checkReady);
+        setTimeout(toggleAddSheet, 400);
+        // Clean URL
+        history.replaceState({}, '', '/index.html');
+      }
+    }, 200);
+  }
+}
+
+// ── INIT PWA SYSTEMS ────────────────────────────────────
+(function initPWA() {
+  registerSW();
+  handleURLAction();
+
+  // Show notif prompt 5 seconds after login (triggered in showMain)
+  // Already wired via maybeShowNotifPrompt() call in showMain patch below
+})();
+
 
 // ── START ──
 init();
