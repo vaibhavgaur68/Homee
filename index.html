@@ -225,27 +225,6 @@
     border-radius: 50%; pointer-events: none;
   }
   .summary-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; }
-
-  /* ── SUMMARY MODE TOGGLE ── */
-  .summary-mode-toggle {
-    display: flex; flex-direction: column; gap: 4px;
-    background: rgba(0,0,0,0.3); border: 1px solid var(--border2);
-    border-radius: 10px; padding: 5px 6px;
-    cursor: pointer; user-select: none; flex-shrink: 0;
-    transition: border-color 0.2s;
-    align-self: flex-start;
-  }
-  .summary-mode-toggle:active { opacity: 0.8; }
-  .smt-icon {
-    display: flex; align-items: center; gap: 5px;
-    padding: 4px 7px; border-radius: 7px;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
-    transition: all 0.2s; color: var(--text3);
-  }
-  .smt-icon.active {
-    background: var(--accent2); color: #1a1000;
-  }
-  .smt-icon.active svg { stroke: #1a1000; }
   .summary-amount {
     font-family: var(--font-display);
     font-size: 42px; color: var(--text);
@@ -881,17 +860,6 @@
             <div class="summary-label" id="summary-label">Today's Spending</div>
             <div class="summary-amount"><span>₹</span><span id="summary-amount">0</span></div>
           </div>
-          <!-- Month-mode toggle -->
-          <div class="summary-mode-toggle" id="summary-mode-toggle" onclick="toggleSummaryMode()" title="Switch view">
-            <div class="smt-icon smt-day active" id="smt-icon-day">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-              <span>Today</span>
-            </div>
-            <div class="smt-icon smt-month" id="smt-icon-month">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <span>Month</span>
-            </div>
-          </div>
         </div>
         <div class="summary-meta">
           <div class="summary-stat">
@@ -995,6 +963,14 @@
         <div class="toggle-sub" id="recurring-toggle-sub">Auto-log on a schedule</div>
       </div>
       <div class="toggle-switch" id="recurring-toggle-sw"></div>
+    </div>
+    <!-- Backfill-month toggle (shown only when recurring is on) -->
+    <div class="recurring-toggle" id="backfill-toggle-row" style="display:none;margin-top:-10px;margin-bottom:16px" onclick="toggleBackfillMonth()">
+      <div class="toggle-left">
+        <div class="toggle-label">Count from start of month</div>
+        <div class="toggle-sub">Backfill expenses from the 1st of this month</div>
+      </div>
+      <div class="toggle-switch" id="backfill-toggle-sw"></div>
     </div>
     <!-- Frequency picker (shown when recurring is on) -->
     <div class="freq-picker" id="freq-picker">
@@ -1194,6 +1170,7 @@ let expenses = [];
 let recurringRules = [];
 let selectedCatId = null;
 let isRecurring = false;
+let isBackfillMonth = false;
 let recurFrequency = 'daily';       // 'daily' | 'weekly' | 'monthly'
 let recurWeekDays = [0,1,2,3,4,5,6]; // 0=Sun … 6=Sat (for weekly)
 let recurDayOfMonth = 1;             // 1-31 (for monthly)
@@ -1203,7 +1180,6 @@ let currentMonth = new Date();
 let selectedIconKey = 'other';
 let localCache = { expenses: [], categories: [], rules: [] };
 let retryCount = 0;
-let summaryMode = 'today'; // 'today' | 'month'
 
 // ── INIT ──
 async function init() {
@@ -1386,13 +1362,12 @@ async function autoLogRecurring() {
   const uid = currentUser.id;
   const today = todayStr();
 
-  // Get ALL dates from rule creation date up to today (unlimited catch-up)
+  // Get ALL dates from rule effective-start up to today
   const dates = [];
   for (const rule of recurringRules) {
-    const start = new Date(rule.created_at);
-    start.setHours(0,0,0,0);
+    const effectiveStart = ruleEffectiveStart(rule);
     const end = new Date();
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(effectiveStart); d <= end; d.setDate(d.getDate() + 1)) {
       const str = d.toISOString().split('T')[0];
       if (!dates.includes(str)) dates.push(str);
     }
@@ -1400,7 +1375,7 @@ async function autoLogRecurring() {
   dates.sort();
 
   for (const rule of recurringRules) {
-    const ruleStart = new Date(rule.created_at).toISOString().split('T')[0];
+    const ruleStart = ruleEffectiveStart(rule).toISOString().split('T')[0];
     const ruleDates = dates.filter(d => d >= ruleStart && ruleShouldRunOnDate(rule, d));
     for (const date of ruleDates) {
       const already = expenses.find(e =>
@@ -1424,6 +1399,22 @@ async function autoLogRecurring() {
   expenses.sort((a,b) => b.date.localeCompare(a.date));
 }
 
+// Returns the date from which a rule should start backfilling
+function ruleEffectiveStart(rule) {
+  if (rule.backfill_month) {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+    // Use whichever is earlier: month start or rule creation
+    const created = new Date(rule.created_at);
+    created.setHours(0, 0, 0, 0);
+    return monthStart < created ? monthStart : created;
+  }
+  const d = new Date(rule.created_at);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
@@ -1438,50 +1429,17 @@ function renderAll() {
 }
 
 // ── SUMMARY ──
-function toggleSummaryMode() {
-  summaryMode = summaryMode === 'today' ? 'month' : 'today';
-  renderSummary();
-}
-
 function renderSummary() {
   const today = todayStr();
-  const dayEl   = document.getElementById('smt-icon-day');
-  const monthEl = document.getElementById('smt-icon-month');
+  const todayExp = expenses.filter(e => e.date === today);
+  const total = todayExp.filter(e => e.status !== 'skipped').reduce((s,e) => s + e.amount, 0);
+  const recurCount = todayExp.filter(e => e.source === 'auto').length;
+  const skipped = todayExp.filter(e => e.status === 'skipped').length;
 
-  if (summaryMode === 'month') {
-    // Month-to-date: from 1st of current month up to today
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString().split('T')[0];
-    const monthExp = expenses.filter(e => e.date >= monthStart && e.date <= today);
-    const total    = monthExp.filter(e => e.status !== 'skipped').reduce((s,e) => s + e.amount, 0);
-    const recurCount = monthExp.filter(e => e.source === 'auto').length;
-    const skipped  = monthExp.filter(e => e.status === 'skipped').length;
-
-    const monthName = now.toLocaleDateString('en-IN', { month: 'long' });
-    document.getElementById('summary-label').textContent = monthName + ' Spending';
-    document.getElementById('summary-amount').textContent = total.toLocaleString('en-IN');
-    document.getElementById('summary-entries').textContent = monthExp.length;
-    document.getElementById('summary-recurring').textContent = recurCount;
-    document.getElementById('summary-skipped').textContent = skipped;
-
-    dayEl?.classList.remove('active');
-    monthEl?.classList.add('active');
-  } else {
-    const todayExp   = expenses.filter(e => e.date === today);
-    const total      = todayExp.filter(e => e.status !== 'skipped').reduce((s,e) => s + e.amount, 0);
-    const recurCount = todayExp.filter(e => e.source === 'auto').length;
-    const skipped    = todayExp.filter(e => e.status === 'skipped').length;
-
-    document.getElementById('summary-label').textContent = "Today's Spending";
-    document.getElementById('summary-amount').textContent = total.toLocaleString('en-IN');
-    document.getElementById('summary-entries').textContent = todayExp.length;
-    document.getElementById('summary-recurring').textContent = recurCount;
-    document.getElementById('summary-skipped').textContent = skipped;
-
-    dayEl?.classList.add('active');
-    monthEl?.classList.remove('active');
-  }
+  document.getElementById('summary-amount').textContent = total.toLocaleString('en-IN');
+  document.getElementById('summary-entries').textContent = todayExp.length;
+  document.getElementById('summary-recurring').textContent = recurCount;
+  document.getElementById('summary-skipped').textContent = skipped;
 }
 
 // ── RECURRING STRIP ──
@@ -1611,8 +1569,10 @@ function renderMonthly() {
     list.appendChild(el);
   }
 
-  // Update summary for monthly view (handled by summary card's own toggle)
-  // No override here — summary card stays in its current mode
+  // Update summary for monthly
+  const monthTotal = Object.values(totals).reduce((s,v) => s+v, 0);
+  document.getElementById('summary-label').textContent = 'Month Spending';
+  document.getElementById('summary-amount').textContent = monthTotal.toLocaleString('en-IN');
 }
 
 function changeMonth(dir) {
@@ -1689,12 +1649,23 @@ function toggleRecurring() {
   isRecurring = !isRecurring;
   document.getElementById('recurring-toggle-sw').classList.toggle('on', isRecurring);
   const picker = document.getElementById('freq-picker');
+  const backfillRow = document.getElementById('backfill-toggle-row');
   if (isRecurring) {
     picker.classList.add('show');
+    backfillRow.style.display = 'flex';
     initFreqPicker();
   } else {
     picker.classList.remove('show');
+    backfillRow.style.display = 'none';
+    // reset backfill when recurring is turned off
+    isBackfillMonth = false;
+    document.getElementById('backfill-toggle-sw').classList.remove('on');
   }
+}
+
+function toggleBackfillMonth() {
+  isBackfillMonth = !isBackfillMonth;
+  document.getElementById('backfill-toggle-sw').classList.toggle('on', isBackfillMonth);
 }
 
 function initFreqPicker() {
@@ -1822,10 +1793,13 @@ function toggleAddSheet() {
   } else {
     selectedCatId = categories[0]?.id || null;
     isRecurring = false;
+    isBackfillMonth = false;
     document.getElementById('add-amount').value = '';
     document.getElementById('add-note').value = '';
     document.getElementById('recurring-toggle-sw').classList.remove('on');
     document.getElementById('freq-picker').classList.remove('show');
+    document.getElementById('backfill-toggle-sw').classList.remove('on');
+    document.getElementById('backfill-toggle-row').style.display = 'none';
     isRecurring = false; recurFrequency = 'daily';
     // Reset milk qty fields
     document.getElementById('milk-qty').value = '';
@@ -1867,6 +1841,7 @@ async function submitExpense() {
       frequency: recurFrequency,
       week_days: recurFrequency === 'weekly'  ? JSON.stringify(recurWeekDays) : null,
       day_of_month: recurFrequency === 'monthly' ? recurDayOfMonth : null,
+      backfill_month: isBackfillMonth,
     };
     const { data: rule } = await sb.from('recurring_rules').insert(rulePayload).select().single();
     if (rule) { recurringRules.push(rule); ruleId = rule.id; }
@@ -2017,17 +1992,30 @@ function renderManageLists() {
   }
   recurringRules.forEach(rule => {
     const cat = categories.find(c => c.id === rule.category_id);
+    const isOn = !!rule.backfill_month;
     const el = document.createElement('div');
     el.className = 'manage-item';
+    el.style.flexDirection = 'column';
+    el.style.alignItems = 'stretch';
+    el.style.gap = '10px';
     el.innerHTML = `
-      <div class="manage-item-info">
-        <div class="manage-item-name">${cat?.name || 'Unknown'}</div>
-        <div class="manage-item-sub">₹${rule.amount} · ${formatFrequencyLabel(rule)}</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="manage-item-info">
+          <div class="manage-item-name">${cat?.name || 'Unknown'}</div>
+          <div class="manage-item-sub">₹${rule.amount} · ${formatFrequencyLabel(rule)}</div>
+        </div>
+        <div class="manage-item-actions">
+          <button class="mini-btn del" onclick="deleteRule('${rule.id}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="manage-item-actions">
-        <button class="mini-btn del" onclick="deleteRule('${rule.id}')">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+      <div class="recurring-toggle" style="margin-bottom:0;padding:10px 14px" onclick="toggleRuleBackfill('${rule.id}')">
+        <div class="toggle-left">
+          <div class="toggle-label" style="font-size:13px">Count from start of month</div>
+          <div class="toggle-sub">Backfill from 1st of current month</div>
+        </div>
+        <div class="toggle-switch ${isOn ? 'on' : ''}" id="backfill-sw-${rule.id}"></div>
       </div>
     `;
     ruleList.appendChild(el);
@@ -2069,6 +2057,24 @@ async function deleteRule(id) {
     renderManageLists(); renderRecurringStrip();
     localCache.rules = recurringRules; saveCache();
     showToast('Recurring rule removed');
+  }
+}
+
+async function toggleRuleBackfill(id) {
+  const rule = recurringRules.find(r => r.id === id);
+  if (!rule) return;
+  const newVal = !rule.backfill_month;
+  const { error } = await sb.from('recurring_rules').update({ backfill_month: newVal }).eq('id', id);
+  if (!error) {
+    rule.backfill_month = newVal;
+    document.getElementById(`backfill-sw-${id}`)?.classList.toggle('on', newVal);
+    localCache.rules = recurringRules; saveCache();
+    // Re-run backfill so new expenses are created immediately
+    await autoLogRecurring();
+    renderAll();
+    showToast(newVal ? 'Backfill enabled — month expenses added' : 'Backfill disabled');
+  } else {
+    showToast('Failed to update');
   }
 }
 
