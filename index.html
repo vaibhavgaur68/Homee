@@ -225,6 +225,27 @@
     border-radius: 50%; pointer-events: none;
   }
   .summary-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; }
+
+  /* ── SUMMARY MODE TOGGLE ── */
+  .summary-mode-toggle {
+    display: flex; flex-direction: column; gap: 4px;
+    background: rgba(0,0,0,0.3); border: 1px solid var(--border2);
+    border-radius: 10px; padding: 5px 6px;
+    cursor: pointer; user-select: none; flex-shrink: 0;
+    transition: border-color 0.2s;
+    align-self: flex-start;
+  }
+  .summary-mode-toggle:active { opacity: 0.8; }
+  .smt-icon {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 7px; border-radius: 7px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+    transition: all 0.2s; color: var(--text3);
+  }
+  .smt-icon.active {
+    background: var(--accent2); color: #1a1000;
+  }
+  .smt-icon.active svg { stroke: #1a1000; }
   .summary-amount {
     font-family: var(--font-display);
     font-size: 42px; color: var(--text);
@@ -860,6 +881,17 @@
             <div class="summary-label" id="summary-label">Today's Spending</div>
             <div class="summary-amount"><span>₹</span><span id="summary-amount">0</span></div>
           </div>
+          <!-- Month-mode toggle -->
+          <div class="summary-mode-toggle" id="summary-mode-toggle" onclick="toggleSummaryMode()" title="Switch view">
+            <div class="smt-icon smt-day active" id="smt-icon-day">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              <span>Today</span>
+            </div>
+            <div class="smt-icon smt-month" id="smt-icon-month">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span>Month</span>
+            </div>
+          </div>
         </div>
         <div class="summary-meta">
           <div class="summary-stat">
@@ -1171,6 +1203,7 @@ let currentMonth = new Date();
 let selectedIconKey = 'other';
 let localCache = { expenses: [], categories: [], rules: [] };
 let retryCount = 0;
+let summaryMode = 'today'; // 'today' | 'month'
 
 // ── INIT ──
 async function init() {
@@ -1405,17 +1438,50 @@ function renderAll() {
 }
 
 // ── SUMMARY ──
+function toggleSummaryMode() {
+  summaryMode = summaryMode === 'today' ? 'month' : 'today';
+  renderSummary();
+}
+
 function renderSummary() {
   const today = todayStr();
-  const todayExp = expenses.filter(e => e.date === today);
-  const total = todayExp.filter(e => e.status !== 'skipped').reduce((s,e) => s + e.amount, 0);
-  const recurCount = todayExp.filter(e => e.source === 'auto').length;
-  const skipped = todayExp.filter(e => e.status === 'skipped').length;
+  const dayEl   = document.getElementById('smt-icon-day');
+  const monthEl = document.getElementById('smt-icon-month');
 
-  document.getElementById('summary-amount').textContent = total.toLocaleString('en-IN');
-  document.getElementById('summary-entries').textContent = todayExp.length;
-  document.getElementById('summary-recurring').textContent = recurCount;
-  document.getElementById('summary-skipped').textContent = skipped;
+  if (summaryMode === 'month') {
+    // Month-to-date: from 1st of current month up to today
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      .toISOString().split('T')[0];
+    const monthExp = expenses.filter(e => e.date >= monthStart && e.date <= today);
+    const total    = monthExp.filter(e => e.status !== 'skipped').reduce((s,e) => s + e.amount, 0);
+    const recurCount = monthExp.filter(e => e.source === 'auto').length;
+    const skipped  = monthExp.filter(e => e.status === 'skipped').length;
+
+    const monthName = now.toLocaleDateString('en-IN', { month: 'long' });
+    document.getElementById('summary-label').textContent = monthName + ' Spending';
+    document.getElementById('summary-amount').textContent = total.toLocaleString('en-IN');
+    document.getElementById('summary-entries').textContent = monthExp.length;
+    document.getElementById('summary-recurring').textContent = recurCount;
+    document.getElementById('summary-skipped').textContent = skipped;
+
+    dayEl?.classList.remove('active');
+    monthEl?.classList.add('active');
+  } else {
+    const todayExp   = expenses.filter(e => e.date === today);
+    const total      = todayExp.filter(e => e.status !== 'skipped').reduce((s,e) => s + e.amount, 0);
+    const recurCount = todayExp.filter(e => e.source === 'auto').length;
+    const skipped    = todayExp.filter(e => e.status === 'skipped').length;
+
+    document.getElementById('summary-label').textContent = "Today's Spending";
+    document.getElementById('summary-amount').textContent = total.toLocaleString('en-IN');
+    document.getElementById('summary-entries').textContent = todayExp.length;
+    document.getElementById('summary-recurring').textContent = recurCount;
+    document.getElementById('summary-skipped').textContent = skipped;
+
+    dayEl?.classList.add('active');
+    monthEl?.classList.remove('active');
+  }
 }
 
 // ── RECURRING STRIP ──
@@ -1545,10 +1611,8 @@ function renderMonthly() {
     list.appendChild(el);
   }
 
-  // Update summary for monthly
-  const monthTotal = Object.values(totals).reduce((s,v) => s+v, 0);
-  document.getElementById('summary-label').textContent = 'Month Spending';
-  document.getElementById('summary-amount').textContent = monthTotal.toLocaleString('en-IN');
+  // Update summary for monthly view (handled by summary card's own toggle)
+  // No override here — summary card stays in its current mode
 }
 
 function changeMonth(dir) {
