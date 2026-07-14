@@ -1336,7 +1336,7 @@ async function loadData(retry = 0) {
     const since = new Date(); since.setDate(since.getDate() - 90);
     const expRes = await sb.from('expenses').select('*')
       .eq('user_id', uid)
-      .gte('date', since.toISOString().split('T')[0])
+      .gte('date', localDateStr(since))
       .order('date', { ascending: false });
 
     expenses = expRes.data || [];
@@ -1381,14 +1381,14 @@ async function autoLogRecurring() {
     const effectiveStart = ruleEffectiveStart(rule);
     const end = new Date();
     for (let d = new Date(effectiveStart); d <= end; d.setDate(d.getDate() + 1)) {
-      const str = d.toISOString().split('T')[0];
+      const str = localDateStr(d);
       if (!dates.includes(str)) dates.push(str);
     }
   }
   dates.sort();
 
   for (const rule of recurringRules) {
-    const ruleStart = ruleEffectiveStart(rule).toISOString().split('T')[0];
+    const ruleStart = localDateStr(ruleEffectiveStart(rule));
     const ruleDates = dates.filter(d => d >= ruleStart && ruleShouldRunOnDate(rule, d));
     for (const date of ruleDates) {
       const already = expenses.find(e =>
@@ -1428,9 +1428,22 @@ function ruleEffectiveStart(rule) {
   return d;
 }
 
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
+// Formats a Date using its LOCAL calendar day (year-month-day as the
+// device sees it) rather than toISOString()'s UTC day. This matters
+// for IST (UTC+5:30): local midnight is still "yesterday 18:30" in
+// UTC, so toISOString() was silently dating auto-logged recurring
+// entries a day early, making them invisible in the Today view.
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
+
+function todayStr() {
+  return localDateStr(new Date());
+}
+
 
 // ── RENDER ALL ──
 function renderAll() {
@@ -2433,7 +2446,7 @@ function scheduleLocalReminder() {
 }
 
 function fireReminderNotification() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr(new Date());
   const lastFired = localStorage.getItem('homee_last_reminder');
 
   // Don't double-fire on same day
