@@ -1603,8 +1603,29 @@ function openMonthDetail(cat, catId, year, month) {
   const body = document.getElementById('month-detail-body');
   body.innerHTML = '';
 
-  if (!monthExp.length) { body.innerHTML = '<p style="color:var(--text3)">No entries</p>'; }
-  else {
+  const total = monthExp.filter(e => e.status !== 'skipped').reduce((s, e) => s + e.amount, 0);
+  if (total > 0) {
+    const payWrap = document.createElement('div');
+    payWrap.style.marginBottom = '18px';
+    payWrap.innerHTML = cat.upi_id ? `
+      <button class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:0" onclick="payViaUpi('${cat.id}', ${total})">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a1000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Pay ₹${total.toLocaleString('en-IN')} via UPI
+      </button>
+    ` : `
+      <div style="font-size:12px;color:var(--text3);background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;line-height:1.5">
+        Add a UPI ID for "${cat.name}" in Manage to pay this total directly.
+      </div>
+    `;
+    body.appendChild(payWrap);
+  }
+
+  if (!monthExp.length) {
+    const empty = document.createElement('p');
+    empty.style.color = 'var(--text3)';
+    empty.textContent = 'No entries';
+    body.appendChild(empty);
+  } else {
     monthExp.forEach(exp => {
       const d = new Date(exp.date);
       const dateStr = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
@@ -1619,6 +1640,17 @@ function openMonthDetail(cat, catId, year, month) {
     });
   }
   openSheet('month-detail-sheet');
+}
+
+function payViaUpi(catId, amount) {
+  const cat = categories.find(c => c.id === catId);
+  if (!cat || !cat.upi_id) return showToast('No UPI ID set for this category');
+  const pa = encodeURIComponent(cat.upi_id);
+  const pn = encodeURIComponent(cat.name);
+  const tn = encodeURIComponent(`${cat.name} (Homee)`);
+  const am = amount.toFixed(2);
+  const upiUrl = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`;
+  window.location.href = upiUrl;
 }
 
 // ── VIEW SWITCH ──
