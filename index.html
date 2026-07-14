@@ -607,6 +607,19 @@
   }
   .mini-btn.del { border-color: rgba(224,112,112,0.3); color: var(--danger); }
   .mini-btn:active { transform: scale(0.93); }
+  .mini-btn.pay-cta {
+    width: auto; padding: 0 12px; gap: 6px;
+    border-color: rgba(232,213,163,0.35); color: var(--accent);
+    font-size: 12px; font-weight: 600; font-family: var(--font-body);
+  }
+  .upi-edit-row { display: none; gap: 8px; }
+  .upi-edit-row input { flex: 1; }
+  .upi-save-btn {
+    width: auto; padding: 0 14px; font-size: 12px; font-weight: 600;
+    border-radius: 8px; border: 1px solid var(--border2); background: transparent;
+    color: var(--accent); cursor: pointer;
+  }
+  .upi-save-btn:active { transform: scale(0.95); }
 
   /* ── PWA INSTALL BANNER ── */
   .install-banner {
@@ -1972,13 +1985,28 @@ function renderManageLists() {
     const icon = ICONS[cat.icon_key] || ICONS.other;
     const el = document.createElement('div');
     el.className = 'manage-item';
+    el.style.flexDirection = 'column';
+    el.style.alignItems = 'stretch';
+    el.style.gap = '10px';
     el.innerHTML = `
-      <div style="color:${color};width:28px;flex-shrink:0">${icon}</div>
-      <div class="manage-item-info"><div class="manage-item-name">${cat.name}</div></div>
-      <div class="manage-item-actions">
-        <button class="mini-btn del" onclick="deleteCategory('${cat.id}')">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="color:${color};width:28px;flex-shrink:0">${icon}</div>
+        <div class="manage-item-info">
+          <div class="manage-item-name">${cat.name}</div>
+          <div class="manage-item-sub">${cat.upi_id ? cat.upi_id : 'No UPI ID set'}</div>
+        </div>
+        <div class="manage-item-actions">
+          <button class="mini-btn" onclick="toggleUpiEdit('${cat.id}')" title="Set UPI ID">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          </button>
+          <button class="mini-btn del" onclick="deleteCategory('${cat.id}')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="upi-edit-row" id="upi-edit-${cat.id}">
+        <input class="form-input" type="text" id="upi-input-${cat.id}" placeholder="e.g. milkman@paytm" value="${cat.upi_id || ''}">
+        <button class="upi-save-btn" onclick="saveUpiId('${cat.id}')">Save</button>
       </div>
     `;
     catList.appendChild(el);
@@ -2047,6 +2075,35 @@ async function deleteCategory(id) {
     renderManageLists(); renderAll();
     localCache.categories = categories; saveCache();
     showToast('Category deleted');
+  }
+}
+
+function toggleUpiEdit(catId) {
+  const row = document.getElementById(`upi-edit-${catId}`);
+  if (!row) return;
+  const isOpen = row.style.display === 'flex';
+  row.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen) document.getElementById(`upi-input-${catId}`)?.focus();
+}
+
+async function saveUpiId(catId) {
+  const input = document.getElementById(`upi-input-${catId}`);
+  const upiId = input.value.trim();
+  if (upiId && !/^[\w.+-]+@[\w.-]+$/.test(upiId)) {
+    return showToast('That doesn\'t look like a valid UPI ID');
+  }
+  const { data, error } = await sb.from('categories')
+    .update({ upi_id: upiId || null })
+    .eq('id', catId)
+    .select().single();
+  if (!error && data) {
+    const cat = categories.find(c => c.id === catId);
+    if (cat) cat.upi_id = data.upi_id;
+    localCache.categories = categories; saveCache();
+    renderManageLists();
+    showToast(upiId ? 'UPI ID saved' : 'UPI ID removed');
+  } else {
+    showToast('Failed to save UPI ID');
   }
 }
 
